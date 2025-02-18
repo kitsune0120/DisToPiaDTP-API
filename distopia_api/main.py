@@ -1,7 +1,7 @@
 import shutil
 from fastapi import FastAPI, Depends, File, UploadFile, HTTPException
 from sqlalchemy.orm import Session
-from distopia_api.database import engine, Base, get_db
+from database import engine, Base, get_db
 from pathlib import Path
 import models
 import openai
