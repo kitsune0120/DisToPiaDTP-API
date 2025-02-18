@@ -27,15 +27,6 @@ app = FastAPI(
     version="1.3"
 )
 
-# ✅ **📌 기본 라우트**
-@app.get("/", summary="루트 페이지", description="API 서버가 정상적으로 실행 중인지 확인하는 엔드포인트입니다.")
-def read_root():
-    return {"message": "Hello, DisToPia!"}
-
-@app.get("/home", summary="홈 페이지", description="DTP 세계관 API가 실행 중인지 확인하는 엔드포인트입니다.")
-def home():
-    return {"message": "DTP 세계관 API 실행 중!"}
-
 # ✅ **📌 ZIP 파일 업로드 기능**
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)  # 업로드 디렉토리 자동 생성
@@ -68,13 +59,22 @@ def download_file(filename: str):
         return FileResponse(file_path, filename=filename, media_type="application/zip")
     return {"error": "파일을 찾을 수 없습니다."}
 
-# ✅ **📌 캐릭터 데이터 API**
-@app.get("/characters/", summary="캐릭터 목록 조회", description="저장된 모든 캐릭터 정보를 반환합니다.")
-def read_characters(db: Session = Depends(get_db)):
-    return db.query(models.Character).all()
+# ✅ **📌 캐릭터 데이터 생성 또는 업데이트 API**
+@app.post("/characters/", summary="캐릭터 생성 또는 업데이트", description="중복된 캐릭터가 있으면 업데이트하고, 없으면 새로 추가합니다.")
+def create_or_update_character(name: str, species: str, ability: str, attack_power: int, defense_power: int, battle_style: str, speech_pattern: str, db: Session = Depends(get_db)):
+    existing_character = db.query(models.Character).filter(models.Character.name == name).first()
 
-@app.post("/characters/", summary="캐릭터 생성", description="새로운 캐릭터 데이터를 추가합니다.")
-def create_character(name: str, species: str, ability: str, attack_power: int, defense_power: int, battle_style: str, speech_pattern: str, db: Session = Depends(get_db)):
+    if existing_character:
+        existing_character.species = species
+        existing_character.ability = ability
+        existing_character.attack_power = attack_power
+        existing_character.defense_power = defense_power
+        existing_character.battle_style = battle_style
+        existing_character.speech_pattern = speech_pattern
+        db.commit()
+        db.refresh(existing_character)
+        return {"message": "✅ 기존 캐릭터 정보가 업데이트되었습니다.", "character": existing_character}
+
     new_character = models.Character(
         name=name, species=species, ability=ability, attack_power=attack_power,
         defense_power=defense_power, battle_style=battle_style, speech_pattern=speech_pattern
@@ -82,40 +82,28 @@ def create_character(name: str, species: str, ability: str, attack_power: int, d
     db.add(new_character)
     db.commit()
     db.refresh(new_character)
-    return new_character
+    return {"message": "✅ 새로운 캐릭터가 추가되었습니다.", "character": new_character}
 
-# ✅ **📌 종족 데이터 API**
-@app.get("/species/", summary="종족 목록 조회", description="저장된 모든 종족 정보를 반환합니다.")
-def read_species(db: Session = Depends(get_db)):
-    return db.query(models.Species).all()
+# ✅ **📌 종족 데이터 생성 또는 업데이트 API**
+@app.post("/species/", summary="종족 생성 또는 업데이트", description="중복된 종족이 있으면 업데이트하고, 없으면 새로 추가합니다.")
+def create_or_update_species(name: str, description: str, abilities: str, db: Session = Depends(get_db)):
+    existing_species = db.query(models.Species).filter(models.Species.name == name).first()
 
-@app.post("/species/", summary="새로운 종족 생성", description="새로운 종족 데이터를 추가합니다.")
-def create_species(name: str, description: str, abilities: str, db: Session = Depends(get_db)):
+    if existing_species:
+        existing_species.description = description
+        existing_species.abilities = abilities
+        db.commit()
+        db.refresh(existing_species)
+        return {"message": "✅ 기존 종족 정보가 업데이트되었습니다.", "species": existing_species}
+
     new_species = models.Species(name=name, description=description, abilities=abilities)
     db.add(new_species)
     db.commit()
     db.refresh(new_species)
-    return new_species
+    return {"message": "✅ 새로운 종족이 추가되었습니다.", "species": new_species}
 
-# ✅ **📌 GPT 연동용 검색 API**
-@app.get("/search/", summary="데이터 검색", description="입력된 키워드로 DB에서 관련 데이터를 검색합니다.")
-def search_data(query: str, db: Session = Depends(get_db)):
-    characters = db.query(models.Character).filter(models.Character.name.contains(query)).all()
-    species = db.query(models.Species).filter(models.Species.name.contains(query)).all()
-    factions = db.query(models.Faction).filter(models.Faction.name.contains(query)).all()
-    technologies = db.query(models.Technology).filter(models.Technology.name.contains(query)).all()
-    events = db.query(models.HistoricalEvent).filter(models.HistoricalEvent.name.contains(query)).all()
-
-    return {
-        "characters": characters,
-        "species": species,
-        "factions": factions,
-        "technologies": technologies,
-        "historical_events": events
-    }
-
-# ✅ **📌 GPT를 활용한 종족 자동 생성 API**
-@app.post("/expand/species/gpt/", summary="GPT 기반 종족 생성", description="GPT-4를 활용하여 새로운 종족을 자동으로 생성하는 기능입니다.")
+# ✅ **📌 GPT 기반 종족 데이터 생성 또는 업데이트 API**
+@app.post("/expand/species/gpt/", summary="GPT 기반 종족 생성 또는 업데이트", description="GPT-4를 활용하여 새로운 종족 데이터를 생성합니다.")
 def expand_species_with_gpt():
     response = openai.ChatCompletion.create(
         model="gpt-4",
@@ -124,7 +112,22 @@ def expand_species_with_gpt():
             {"role": "user", "content": "새로운 종족을 추가하려면 어떤 질문을 해야 할까요?"}
         ]
     )
-    return response
+    species_data = response['choices'][0]['message']['content']
+
+    existing_species = db.query(models.Species).filter(models.Species.name == species_data["name"]).first()
+
+    if existing_species:
+        existing_species.description = species_data["description"]
+        existing_species.abilities = species_data["abilities"]
+        db.commit()
+        db.refresh(existing_species)
+        return {"message": "✅ 기존 종족 정보가 업데이트되었습니다.", "species": existing_species}
+
+    new_species = models.Species(name=species_data["name"], description=species_data["description"], abilities=species_data["abilities"])
+    db.add(new_species)
+    db.commit()
+    db.refresh(new_species)
+    return {"message": "✅ 새로운 종족이 추가되었습니다.", "species": new_species}
 
 # ✅ **🚀 자동 포트 설정 (Render 환경 호환)**
 import uvicorn
