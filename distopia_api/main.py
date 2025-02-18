@@ -16,7 +16,12 @@ app = FastAPI(
     version="1.1"
 )
 
+# ✅ 추가된 기본 라우트
 @app.get("/")
+def read_root():
+    return {"message": "Hello, DisToPia!"}
+
+@app.get("/home")
 def home():
     return {"message": "DTP 세계관 API 실행 중!"}
 
@@ -146,4 +151,6 @@ def expand_species_with_gpt():
         messages=[
             {"role": "system", "content": "당신은 DTP 세계관 확장을 위한 질문을 생성하는 AI입니다."},
             {"role": "user", "content": "새로운 종족을 추가하려면 어떤 질문을 해야 할까요?"}
-  
+        ]
+    )
+    return response
