@@ -4,12 +4,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# 데이터베이스 URL (여기서는 SQLite 예시)
+# SQLite DB 예시 (파일형). Render에서 PostgreSQL 등을 사용하려면 이 부분 변경
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False}  # SQLite 전용 옵션
+    connect_args={"check_same_thread": False}  # SQLite 특수 옵션
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
