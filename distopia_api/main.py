@@ -8,11 +8,11 @@ from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy.orm import Session
 import openai
 
-# LangChain & Chroma (RAG용)
-from langchain.chat_models import ChatOpenAI
-from langchain.chains import ConversationalRetrievalChain
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
+# ====== RAG용 (langchain_community로 교체) ======
+from langchain_community.chat_models import ChatOpenAI
+from langchain_community.chains import ConversationalRetrievalChain
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -32,7 +32,7 @@ app = FastAPI(
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# 세션 기반 대화에 사용할 임시 저장 (실제 서버에선 Redis 등 사용 권장)
+# 세션 기반 대화 (임시 저장). 실제 서버에는 Redis 등 사용 권장
 session_storage = {}
 
 # =============================================================================
@@ -43,7 +43,6 @@ def get_chroma_client():
     Chroma DB를 초기화하고 반환합니다.
     'chroma_db' 폴더에 벡터 데이터를 영구 저장합니다.
     """
-    # Render에 배포 시, Environment 탭에 OPENAI_API_KEY를 설정하는 것이 안전합니다.
     api_key = os.environ.get("OPENAI_API_KEY", OPENAI_API_KEY)
     if not api_key:
         raise ValueError("OPENAI_API_KEY가 설정되지 않았습니다.")
@@ -52,7 +51,7 @@ def get_chroma_client():
 
     vectordb = Chroma(
         collection_name="distopia_collection",
-        persist_directory="chroma_db",  # DB 데이터가 저장되는 폴더
+        persist_directory="chroma_db",  # DB 데이터 저장 폴더
         embedding_function=embeddings
     )
     return vectordb
@@ -175,7 +174,6 @@ def get_visualized_data(db: Session = Depends(get_db)):
     for reg in regions:
         prefix = "<span class='new-tag'>🆕</span> " if reg.new else ""
         html_content += f"<p>{prefix}<strong>{reg.name}</strong> - 설명: {reg.description}</p>"
-
     html_content += "</body></html>"
     return HTMLResponse(content=html_content)
 
