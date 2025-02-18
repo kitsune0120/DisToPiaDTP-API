@@ -3,10 +3,11 @@ import os
 import shutil
 from pathlib import Path
 from fastapi import FastAPI, Depends, File, UploadFile, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 import openai
 
-# ✅ 프로젝트 루트 경로를 sys.path에 추가하여 모듈 경로 오류 해결
+# ✅ 프로젝트 루트 경로 추가 (모듈 인식 문제 해결)
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # ✅ 내부 모듈 임포트
@@ -23,7 +24,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="DTP 세계 확장 API",
     description="이 API는 DTP 세계관을 확장하는 기능을 제공합니다.",
-    version="1.2"
+    version="1.3"
 )
 
 # ✅ **📌 기본 라우트**
@@ -36,19 +37,36 @@ def home():
     return {"message": "DTP 세계관 API 실행 중!"}
 
 # ✅ **📌 ZIP 파일 업로드 기능**
-UPLOAD_DIR = Path("uploads")
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)  # 디렉토리 없으면 생성
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)  # 업로드 디렉토리 자동 생성
 
 @app.post("/upload-zip/", summary="ZIP 파일 업로드", description="ZIP 파일을 업로드하여 서버에 저장하는 기능입니다.")
 async def upload_zip(file: UploadFile = File(...)):
     if not file.filename.endswith(".zip"):
         raise HTTPException(status_code=400, detail="ZIP 파일만 업로드할 수 있습니다.")
     
-    file_path = UPLOAD_DIR / file.filename
-    with file_path.open("wb") as buffer:
+    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
     return {"filename": file.filename, "message": "✅ ZIP 파일이 성공적으로 업로드 및 저장되었습니다!"}
+
+# ✅ **📌 업로드된 파일 목록 조회 API**
+@app.get("/uploaded-files/", summary="업로드된 파일 목록 조회", description="서버에 저장된 파일 목록을 반환합니다.")
+def list_uploaded_files():
+    try:
+        files = os.listdir(UPLOAD_DIR)
+        return {"uploaded_files": files}
+    except FileNotFoundError:
+        return {"error": "업로드 폴더가 존재하지 않습니다."}
+
+# ✅ **📌 업로드된 파일 다운로드 API**
+@app.get("/download-file/{filename}/", summary="파일 다운로드", description="업로드된 ZIP 파일을 다운로드합니다.")
+def download_file(filename: str):
+    file_path = os.path.join(UPLOAD_DIR, filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path, filename=filename, media_type="application/zip")
+    return {"error": "파일을 찾을 수 없습니다."}
 
 # ✅ **📌 캐릭터 데이터 API**
 @app.get("/characters/", summary="캐릭터 목록 조회", description="저장된 모든 캐릭터 정보를 반환합니다.")
