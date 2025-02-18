@@ -1,3 +1,5 @@
+# distopia_api/main.py
+
 import sys
 import os
 import shutil
@@ -8,12 +10,11 @@ from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy.orm import Session
 import openai
 
-# langchain_community 대신에:
+# langchain_community와 langchain 혼합 사용
 from langchain_community.chat_models import ChatOpenAI
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
-
-# ❗️ ConversationalRetrievalChain은 langchain_community에 아직 없으므로:
+# ConversationalRetrievalChain은 langchain에 존재 (community에 없음)
 from langchain.chains import ConversationalRetrievalChain
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -23,27 +24,28 @@ from distopia_api.models import models
 
 OPENAI_API_KEY = "YOUR_OPENAI_API_KEY"
 
+# 데이터베이스 테이블 생성
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="DTP 세계 확장 API (RAG + 세션 대화 포함)",
-    description="이 API는 DTP 세계관을 확장하기 위한 모든 기능을 제공합니다. (ZIP 업로드, DB, RAG, 세션 대화 등)",
+    title="DTP 세계 확장 API (DB + RAG + 세션)",
+    description="이 API는 DisToPia 세계관을 확장하기 위한 모든 기능을 제공합니다.",
     version="3.0"
 )
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# 세션 기반 대화 (임시 저장). 실제 서버에는 Redis 등 사용 권장
+# 세션 기반 대화(임시). 실제 서버 환경에서는 Redis 등 추천
 session_storage = {}
 
 # =============================================================================
-# A. Chroma 벡터 DB 초기화 함수 (RAG용)
+# (A) Chroma 벡터 DB 초기화 함수 (RAG용)
 # =============================================================================
 def get_chroma_client():
     """
-    Chroma DB를 초기화하고 반환합니다.
-    'chroma_db' 폴더에 벡터 데이터를 영구 저장합니다.
+    Chroma DB를 초기화한 뒤 반환합니다.
+    'chroma_db' 폴더에 벡터 데이터가 영구 저장됩니다.
     """
     api_key = os.environ.get("OPENAI_API_KEY", OPENAI_API_KEY)
     if not api_key:
@@ -55,7 +57,7 @@ def get_chroma_client():
     )
     vectordb = Chroma(
         collection_name="distopia_collection",
-        persist_directory="chroma_db",  # DB 데이터 저장 폴더
+        persist_directory="chroma_db",
         embedding_function=embeddings
     )
     return vectordb
@@ -63,7 +65,7 @@ def get_chroma_client():
 # =============================================================================
 # 1. ZIP 파일 업로드/다운로드 기능
 # =============================================================================
-@app.post("/upload-zip/", summary="ZIP 파일 업로드")
+@app.post("/upload-zip/", summary="ZIP 파일 업로드", description="ZIP 파일을 업로드하여 서버에 저장합니다.")
 async def upload_zip(file: UploadFile = File(...)):
     if not file.filename.endswith(".zip"):
         raise HTTPException(status_code=400, detail="ZIP 파일만 업로드할 수 있습니다.")
@@ -72,9 +74,9 @@ async def upload_zip(file: UploadFile = File(...)):
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
-    return {"filename": file.filename, "message": "✅ ZIP 파일이 성공적으로 업로드되었습니다!"}
+    return {"filename": file.filename, "message": "✅ ZIP 파일 업로드가 완료되었습니다."}
 
-@app.get("/uploaded-files/", summary="업로드된 파일 목록 조회")
+@app.get("/uploaded-files/", summary="업로드된 파일 목록 조회", description="서버에 저장된 업로드 파일을 확인합니다.")
 def list_uploaded_files():
     try:
         files = os.listdir(UPLOAD_DIR)
@@ -82,17 +84,17 @@ def list_uploaded_files():
     except FileNotFoundError:
         return {"error": "업로드 폴더가 존재하지 않습니다."}
 
-@app.get("/download-file/{filename}/", summary="파일 다운로드")
+@app.get("/download-file/{filename}/", summary="파일 다운로드", description="업로드된 ZIP 파일을 다운로드합니다.")
 def download_file(filename: str):
     file_path = os.path.join(UPLOAD_DIR, filename)
     if os.path.exists(file_path):
         return FileResponse(file_path, filename=filename, media_type="application/zip")
-    return {"error": "파일을 찾을 수 없습니다."}
+    return {"error": "해당 파일을 찾을 수 없습니다."}
 
 # =============================================================================
-# 2. 저장된 데이터를 JSON, Markdown, HTML로 보기
+# 2. 저장된 데이터를 JSON, Markdown, HTML 형태로 조회
 # =============================================================================
-@app.get("/all-data/", summary="모든 데이터 조회 (JSON)")
+@app.get("/all-data/", summary="전체 데이터 조회 (JSON)", description="캐릭터, 종족, 지역 정보를 모두 JSON 형태로 반환.")
 def get_all_data(db: Session = Depends(get_db)):
     characters = db.query(models.Character).all()
     species = db.query(models.Species).all()
@@ -123,7 +125,7 @@ def get_all_data(db: Session = Depends(get_db)):
     }
     return data
 
-@app.get("/formatted-data/", summary="모든 데이터 조회 (Markdown)")
+@app.get("/formatted-data/", summary="전체 데이터 조회 (Markdown)", description="캐릭터, 종족, 지역 정보를 Markdown으로 보기 좋게 반환합니다.")
 def get_formatted_data(db: Session = Depends(get_db)):
     characters = db.query(models.Character).all()
     species = db.query(models.Species).all()
@@ -145,7 +147,7 @@ def get_formatted_data(db: Session = Depends(get_db)):
 
     return {"formatted_data": markdown_data}
 
-@app.get("/visualized-data/", summary="모든 데이터 조회 (HTML)", response_class=HTMLResponse)
+@app.get("/visualized-data/", summary="전체 데이터 조회 (HTML)", response_class=HTMLResponse)
 def get_visualized_data(db: Session = Depends(get_db)):
     characters = db.query(models.Character).all()
     species = db.query(models.Species).all()
@@ -179,23 +181,24 @@ def get_visualized_data(db: Session = Depends(get_db)):
         prefix = "<span class='new-tag'>🆕</span> " if reg.new else ""
         html_content += f"<p>{prefix}<strong>{reg.name}</strong> - 설명: {reg.description}</p>"
     html_content += "</body></html>"
-    return HTMLResponse(content=html_content)
+
+    return html_content
 
 # =============================================================================
-# 3. NEW! 데이터 정리 (confirm-view)
+# 3. NEW! 데이터 정리
 # =============================================================================
-@app.post("/confirm-view/", summary="새로운 데이터 정리", description="새로운 데이터를 확인하면 'new' 상태를 False로 변경합니다.")
+@app.post("/confirm-view/", summary="새로운 데이터 정리", description="'new' 상태인 데이터를 모두 정리합니다.")
 def confirm_view(db: Session = Depends(get_db)):
     db.query(models.Character).filter(models.Character.new == True).update({"new": False})
     db.query(models.Species).filter(models.Species.new == True).update({"new": False})
     db.query(models.Region).filter(models.Region.new == True).update({"new": False})
     db.commit()
-    return {"message": "✅ 새로운 데이터가 정리되었습니다."}
+    return {"message": "✅ 새로운 데이터들을 정리했습니다."}
 
 # =============================================================================
 # 4. GPT가 기억하는 데이터 저장 (remember)
 # =============================================================================
-@app.post("/remember/", summary="GPT가 기억하는 데이터 저장")
+@app.post("/remember/", summary="GPT가 기억하는 데이터 저장", description="카테고리를 지정하고, 이름과 설명을 전달하여 DB에 새 데이터로 추가합니다.")
 def remember_data(category: str, name: str, description: str, db: Session = Depends(get_db)):
     model_map = {
         "character": models.Character,
@@ -204,14 +207,14 @@ def remember_data(category: str, name: str, description: str, db: Session = Depe
     }
 
     if category not in model_map:
-        raise HTTPException(status_code=400, detail="잘못된 카테고리. 'character', 'species', 'region' 중 선택하세요.")
+        raise HTTPException(status_code=400, detail="잘못된 카테고리입니다. (character/species/region)")
 
     existing_item = db.query(model_map[category]).filter(model_map[category].name == name).first()
     if existing_item:
         existing_item.description = description
         db.commit()
         db.refresh(existing_item)
-        return {"message": f"✅ 기존 {category} '{name}' 정보가 업데이트되었습니다."}
+        return {"message": f"✅ 기존 {category} '{name}'가(이) 업데이트되었습니다."}
     else:
         new_item = model_map[category](name=name, description=description, new=True)
         db.add(new_item)
@@ -222,7 +225,7 @@ def remember_data(category: str, name: str, description: str, db: Session = Depe
 # =============================================================================
 # 5. DisToPia 세계관 채팅 (DB 기반)
 # =============================================================================
-@app.post("/dtp-chat/", summary="DisToPia 세계관 질문", description="질문에 대해 DB에서 검색 후 답변")
+@app.post("/dtp-chat/", summary="DisToPia 세계관 질문", description="질문을 받으면 DB 검색을 통해 관련 정보를 반환합니다.")
 def dtp_chat(question: str, db: Session = Depends(get_db)):
     response = ""
 
@@ -245,14 +248,14 @@ def dtp_chat(question: str, db: Session = Depends(get_db)):
             response += f"- {reg.name}\n  설명: {reg.description}\n"
 
     if not response:
-        response = "❌ 해당 정보가 없습니다. '기억해줘' 기능으로 추가할 수 있습니다."
+        response = "❌ 해당 정보가 없습니다. '기억해줘' 기능으로 새로 추가할 수 있습니다."
 
     return {"message": response}
 
 # =============================================================================
 # 6. 데이터 개수 및 최근 업데이트 (data-info)
 # =============================================================================
-@app.get("/data-info/", summary="데이터 개수 및 최근 업데이트 확인")
+@app.get("/data-info/", summary="데이터 개수 및 최근 업데이트", description="캐릭터, 종족, 지역의 개수와 최근 업데이트 시간 확인.")
 def get_data_info(db: Session = Depends(get_db)):
     char_count = db.query(models.Character).count()
     species_count = db.query(models.Species).count()
@@ -271,7 +274,7 @@ def get_data_info(db: Session = Depends(get_db)):
 # =============================================================================
 # 7. 검색 기능 (search-data)
 # =============================================================================
-@app.get("/search-data/", summary="데이터 검색", description="키워드로 캐릭터, 종족, 지역 검색")
+@app.get("/search-data/", summary="데이터 검색", description="키워드를 사용해 캐릭터, 종족, 지역을 검색합니다.")
 def search_data(query: str, db: Session = Depends(get_db)):
     characters = db.query(models.Character).filter(models.Character.name.contains(query)).all()
     species = db.query(models.Species).filter(models.Species.name.contains(query)).all()
@@ -286,7 +289,7 @@ def search_data(query: str, db: Session = Depends(get_db)):
 # =============================================================================
 # 8. 특정 데이터 삭제 (delete-data)
 # =============================================================================
-@app.delete("/delete-data/{category}/{name}/", summary="특정 데이터 삭제", description="캐릭터/종족/지역 데이터 중 특정 항목 삭제")
+@app.delete("/delete-data/{category}/{name}/", summary="특정 데이터 삭제", description="캐릭터/종족/지역 중 하나를 지정해 삭제합니다.")
 def delete_data(category: str, name: str, db: Session = Depends(get_db)):
     model_map = {
         "character": models.Character,
@@ -295,7 +298,7 @@ def delete_data(category: str, name: str, db: Session = Depends(get_db)):
     }
 
     if category not in model_map:
-        raise HTTPException(status_code=400, detail="잘못된 카테고리. 'character', 'species', 'region' 중 선택")
+        raise HTTPException(status_code=400, detail="잘못된 카테고리입니다.")
 
     item = db.query(model_map[category]).filter(model_map[category].name == name).first()
     if not item:
@@ -308,69 +311,22 @@ def delete_data(category: str, name: str, db: Session = Depends(get_db)):
 # =============================================================================
 # 9. RAG: 문서 임베딩 후 GPT에 검색
 # =============================================================================
-@app.post("/rag/add-data/", summary="RAG용 문서 추가", description="텍스트를 임베딩 후 Chroma DB에 저장")
+@app.post("/rag/add-data/", summary="RAG용 문서 추가", description="텍스트를 벡터로 임베딩하여 Chroma DB에 저장합니다.")
 def add_rag_data(title: str, content: str):
     vectordb = get_chroma_client()
     vectordb.add_texts(texts=[content], metadatas=[{"title": title}])
     vectordb.persist()
-    return {"message": f"'{title}' 문서가 RAG DB에 추가되었습니다!"}
+    return {"message": f"'{title}' 문서가 Chroma DB에 추가되었습니다."}
 
-@app.post("/rag/chat/", summary="RAG 기반 질의응답", description="Chroma DB에서 문서를 검색 후 GPT가 답변")
+@app.post("/rag/chat/", summary="RAG 기반 질의응답", description="Chroma DB에서 문서를 검색 후 GPT가 답변.")
 def rag_chat(question: str, history: list = []):
     vectordb = get_chroma_client()
-
-    # ❗️ ConversationalRetrievalChain은 langchain.chains에서 가져옴
     chain = ConversationalRetrievalChain.from_llm(
         llm=ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0),
         retriever=vectordb.as_retriever(search_kwargs={"k": 3}),
     )
-
-    # history는 [userQ, aiA, userQ, aiA, ...]
     chat_history = []
     for i in range(0, len(history), 2):
         user_q = history[i]
         ai_a = history[i+1] if i+1 < len(history) else ""
-        chat_history.append((user_q, ai_a))
-
-    result = chain({"question": question, "chat_history": chat_history})
-    return {"answer": result["answer"]}
-
-# =============================================================================
-# 10. RAG + 세션 기반 대화
-# =============================================================================
-@app.post("/rag/session-chat/", summary="세션 기반 RAG 대화")
-def rag_session_chat(session_id: str, question: str):
-    if session_id not in session_storage:
-        session_storage[session_id] = []
-
-    history = session_storage[session_id]
-    vectordb = get_chroma_client()
-
-    chain = ConversationalRetrievalChain.from_llm(
-        llm=ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0),
-        retriever=vectordb.as_retriever(search_kwargs={"k": 3}),
-    )
-
-    # 기존 대화 = [(userQ, aiA), (userQ, aiA), ...]
-    chat_history = []
-    for i in range(0, len(history), 2):
-        user_q = history[i]
-        ai_a = history[i+1] if i+1 < len(history) else ""
-        chat_history.append((user_q, ai_a))
-
-    result = chain({"question": question, "chat_history": chat_history})
-    answer = result["answer"]
-
-    session_storage[session_id].append(question)
-    session_storage[session_id].append(answer)
-
-    return {"answer": answer, "session_history": session_storage[session_id]}
-
-# =============================================================================
-# 11. Render 자동 포트 설정
-# =============================================================================
-import uvicorn
-
-if __name__ == "__main__":
-    PORT = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=True)
+        chat_history.append((u
