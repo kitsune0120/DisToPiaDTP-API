@@ -1,17 +1,25 @@
+import sys
+import os
 import shutil
+from pathlib import Path
 from fastapi import FastAPI, Depends, File, UploadFile, HTTPException
 from sqlalchemy.orm import Session
-from distopia_api.database import engine, Base, get_db
-from pathlib import Path
-from distopia_api.models import models
 import openai
 
-# OpenAI API 키 설정 (GPT 사용 시 필요)
+# ✅ 프로젝트 루트 경로를 sys.path에 추가하여 모듈 경로 오류 해결
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# ✅ 내부 모듈 임포트
+from distopia_api.database import engine, Base, get_db
+from distopia_api.models import models
+
+# ✅ OpenAI API 키 설정 (GPT 사용 시 필요)
 OPENAI_API_KEY = "YOUR_OPENAI_API_KEY"
 
-# 데이터베이스 테이블 생성
+# ✅ 데이터베이스 테이블 생성
 Base.metadata.create_all(bind=engine)
 
+# ✅ FastAPI 애플리케이션 생성
 app = FastAPI(
     title="DTP 세계 확장 API",
     description="이 API는 DTP 세계관을 확장하는 기능을 제공합니다.",
