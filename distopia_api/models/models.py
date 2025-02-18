@@ -25,7 +25,7 @@ class Species(Base):
     abilities = Column(String)
     new = Column(Boolean, default=True)
 
-# 지역 모델
+# 지역(Region) 모델
 class Region(Base):
     __tablename__ = "regions"
 
