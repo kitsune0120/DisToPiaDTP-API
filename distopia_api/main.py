@@ -1,7 +1,9 @@
-from fastapi import FastAPI, Depends
+import shutil
+from fastapi import FastAPI, Depends, File, UploadFile, HTTPException
 from sqlalchemy.orm import Session
 from distopia_api.database import engine, Base, get_db
-from distopia_api.models import *  # ✅ models.py를 올바르게 불러오기
+from pathlib import Path
+import models
 import openai
 
 # OpenAI API 키 설정 (GPT 사용 시 필요)
@@ -11,28 +13,43 @@ OPENAI_API_KEY = "YOUR_OPENAI_API_KEY"
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="DTP World Expansion API",
-    description="DTP 세계관을 사용자의 질문을 기반으로 확장하는 API",
-    version="1.1"
+    title="DTP 세계 확장 API",
+    description="이 API는 DTP 세계관을 확장하는 기능을 제공합니다.",
+    version="1.2"
 )
 
-# ✅ 추가된 기본 라우트
-@app.get("/")
+# ✅ **📌 기본 라우트**
+@app.get("/", summary="루트 페이지", description="API 서버가 정상적으로 실행 중인지 확인하는 엔드포인트입니다.")
 def read_root():
     return {"message": "Hello, DisToPia!"}
 
-@app.get("/home")
+@app.get("/home", summary="홈 페이지", description="DTP 세계관 API가 실행 중인지 확인하는 엔드포인트입니다.")
 def home():
     return {"message": "DTP 세계관 API 실행 중!"}
 
-# 📌 **캐릭터 데이터 API**
-@app.get("/characters/")
-def read_characters(db: Session = Depends(get_db)):
-    return db.query(Character).all()
+# ✅ **📌 ZIP 파일 업로드 기능**
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)  # 디렉토리 없으면 생성
 
-@app.post("/characters/")
+@app.post("/upload-zip/", summary="ZIP 파일 업로드", description="ZIP 파일을 업로드하여 서버에 저장하는 기능입니다.")
+async def upload_zip(file: UploadFile = File(...)):
+    if not file.filename.endswith(".zip"):
+        raise HTTPException(status_code=400, detail="ZIP 파일만 업로드할 수 있습니다.")
+    
+    file_path = UPLOAD_DIR / file.filename
+    with file_path.open("wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    return {"filename": file.filename, "message": "✅ ZIP 파일이 성공적으로 업로드 및 저장되었습니다!"}
+
+# ✅ **📌 캐릭터 데이터 API**
+@app.get("/characters/", summary="캐릭터 목록 조회", description="저장된 모든 캐릭터 정보를 반환합니다.")
+def read_characters(db: Session = Depends(get_db)):
+    return db.query(models.Character).all()
+
+@app.post("/characters/", summary="캐릭터 생성", description="새로운 캐릭터 데이터를 추가합니다.")
 def create_character(name: str, species: str, ability: str, attack_power: int, defense_power: int, battle_style: str, speech_pattern: str, db: Session = Depends(get_db)):
-    new_character = Character(
+    new_character = models.Character(
         name=name, species=species, ability=ability, attack_power=attack_power,
         defense_power=defense_power, battle_style=battle_style, speech_pattern=speech_pattern
     )
@@ -41,79 +58,27 @@ def create_character(name: str, species: str, ability: str, attack_power: int, d
     db.refresh(new_character)
     return new_character
 
-# 📌 **종족 데이터 API**
-@app.get("/species/")
+# ✅ **📌 종족 데이터 API**
+@app.get("/species/", summary="종족 목록 조회", description="저장된 모든 종족 정보를 반환합니다.")
 def read_species(db: Session = Depends(get_db)):
-    return db.query(Species).all()
+    return db.query(models.Species).all()
 
-@app.post("/species/")
+@app.post("/species/", summary="새로운 종족 생성", description="새로운 종족 데이터를 추가합니다.")
 def create_species(name: str, description: str, abilities: str, db: Session = Depends(get_db)):
-    new_species = Species(name=name, description=description, abilities=abilities)
+    new_species = models.Species(name=name, description=description, abilities=abilities)
     db.add(new_species)
     db.commit()
     db.refresh(new_species)
     return new_species
 
-# 📌 **조직 및 세력 데이터 API**
-@app.get("/factions/")
-def read_factions(db: Session = Depends(get_db)):
-    return db.query(Faction).all()
-
-@app.post("/factions/")
-def create_faction(name: str, description: str, leader: str, db: Session = Depends(get_db)):
-    new_faction = Faction(name=name, description=description, leader=leader)
-    db.add(new_faction)
-    db.commit()
-    db.refresh(new_faction)
-    return new_faction
-
-# 📌 **지역 데이터 API**
-@app.get("/locations/")
-def read_locations(db: Session = Depends(get_db)):
-    return db.query(Location).all()
-
-@app.post("/locations/")
-def create_location(name: str, description: str, history: str, db: Session = Depends(get_db)):
-    new_location = Location(name=name, description=description, history=history)
-    db.add(new_location)
-    db.commit()
-    db.refresh(new_location)
-    return new_location
-
-# 📌 **기술 데이터 API**
-@app.get("/technologies/")
-def read_technologies(db: Session = Depends(get_db)):
-    return db.query(Technology).all()
-
-@app.post("/technologies/")
-def create_technology(name: str, category: str, description: str, db: Session = Depends(get_db)):
-    new_technology = Technology(name=name, category=category, description=description)
-    db.add(new_technology)
-    db.commit()
-    db.refresh(new_technology)
-    return new_technology
-
-# 📌 **역사적 사건 데이터 API**
-@app.get("/historical_events/")
-def read_events(db: Session = Depends(get_db)):
-    return db.query(HistoricalEvent).all()
-
-@app.post("/historical_events/")
-def create_event(name: str, description: str, year: int, related_faction: int, db: Session = Depends(get_db)):
-    new_event = HistoricalEvent(name=name, description=description, year=year, related_faction=related_faction)
-    db.add(new_event)
-    db.commit()
-    db.refresh(new_event)
-    return new_event
-
-# 📌 **GPT 연동용 검색 API**
-@app.get("/search/")
+# ✅ **📌 GPT 연동용 검색 API**
+@app.get("/search/", summary="데이터 검색", description="입력된 키워드로 DB에서 관련 데이터를 검색합니다.")
 def search_data(query: str, db: Session = Depends(get_db)):
-    characters = db.query(Character).filter(Character.name.contains(query)).all()
-    species = db.query(Species).filter(Species.name.contains(query)).all()
-    factions = db.query(Faction).filter(Faction.name.contains(query)).all()
-    technologies = db.query(Technology).filter(Technology.name.contains(query)).all()
-    events = db.query(HistoricalEvent).filter(HistoricalEvent.name.contains(query)).all()
+    characters = db.query(models.Character).filter(models.Character.name.contains(query)).all()
+    species = db.query(models.Species).filter(models.Species.name.contains(query)).all()
+    factions = db.query(models.Faction).filter(models.Faction.name.contains(query)).all()
+    technologies = db.query(models.Technology).filter(models.Technology.name.contains(query)).all()
+    events = db.query(models.HistoricalEvent).filter(models.HistoricalEvent.name.contains(query)).all()
 
     return {
         "characters": characters,
@@ -123,28 +88,8 @@ def search_data(query: str, db: Session = Depends(get_db)):
         "historical_events": events
     }
 
-# 📌 **질문 기반 확장 API (사용자가 답변해야 추가됨)**
-@app.post("/expand/species/")
-def expand_species_request():
-    return {
-        "message": "새로운 종족을 추가하려면 아래 정보를 입력해주세요.",
-        "questions": [
-            "종족의 이름은 무엇인가요?",
-            "이 종족의 고유 능력은 무엇인가요?",
-            "이 종족은 어디에서 살고 있나요?"
-        ]
-    }
-
-@app.post("/expand/species/submit/")
-def submit_species(name: str, abilities: str, habitat: str, db: Session = Depends(get_db)):
-    new_species = Species(name=name, description=f"{name}은(는) {habitat}에서 살아가는 종족입니다.", abilities=abilities)
-    db.add(new_species)
-    db.commit()
-    db.refresh(new_species)
-    return {"message": f"새로운 종족 '{name}'이(가) 추가되었습니다!"}
-
-# 📌 **GPT를 활용한 질문 자동 생성 API**
-@app.post("/expand/species/gpt/")
+# ✅ **📌 GPT를 활용한 종족 자동 생성 API**
+@app.post("/expand/species/gpt/", summary="GPT 기반 종족 생성", description="GPT-4를 활용하여 새로운 종족을 자동으로 생성하는 기능입니다.")
 def expand_species_with_gpt():
     response = openai.ChatCompletion.create(
         model="gpt-4",
