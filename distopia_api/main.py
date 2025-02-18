@@ -104,4 +104,37 @@ def remember_data(category: str, name: str, description: str, db: Session = Depe
 
 # ✅ **📌 DisToPia 세계관 카테고리 채팅은 데이터베이스 내에서만 답변 (`POST /dtp-chat/`)**
 @app.post("/dtp-chat/", summary="DisToPia 세계관 내 질문", description="질문에 대한 답변을 데이터베이스에서 검색 후 반환합니다.")
-def dtp_chat(question: str, db: Session =
+def dtp_chat(question: str, db: Session = Depends(get_db)):  # ✅ 오류 수정: 괄호 닫힘 문제 해결
+    response = ""
+
+    # ✅ 캐릭터 데이터 검색
+    characters = db.query(models.Character).filter(models.Character.name.contains(question)).all()
+    if characters:
+        response += "📌 캐릭터 정보:\n"
+        for char in characters:
+            response += f"- {char.name} ({char.species})\n  능력: {char.ability}\n  공격력: {char.attack_power}, 방어력: {char.defense_power}\n\n"
+
+    # ✅ 종족 데이터 검색
+    species = db.query(models.Species).filter(models.Species.name.contains(question)).all()
+    if species:
+        response += "📌 종족 정보:\n"
+        for spec in species:
+            response += f"- {spec.name}\n  설명: {spec.description}\n  능력: {spec.abilities}\n\n"
+
+    # ✅ 지역 데이터 검색
+    regions = db.query(models.Region).filter(models.Region.name.contains(question)).all()
+    if regions:
+        response += "📌 지역 정보:\n"
+        for reg in regions:
+            response += f"- {reg.name}\n  설명: {reg.description}\n  기후: {reg.climate}\n\n"
+
+    if not response:
+        response = "❌ 해당 정보가 데이터베이스에 없습니다. 새로운 정보를 추가하려면 '기억해줘' 기능을 사용하세요."
+
+    return {"message": response}
+
+import uvicorn
+
+if __name__ == "__main__":
+    PORT = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=True)
