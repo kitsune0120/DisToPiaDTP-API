@@ -2,6 +2,8 @@ fastapi
 uvicorn
 sqlalchemy
 openai
-databases
-psycopg2-binary
+langchain
+chromadb
+requests
 python-multipart
+psycopg2-binary
