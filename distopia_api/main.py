@@ -125,3 +125,9 @@ def expand_species_with_gpt():
         ]
     )
     return response
+
+# ✅ **🚀 자동 포트 설정 (Render 환경 호환)**
+import uvicorn
+
+PORT = int(os.environ.get("PORT", 8000))  # Render에서 제공하는 포트 사용
+uvicorn.run(app, host="0.0.0.0", port=PORT)
