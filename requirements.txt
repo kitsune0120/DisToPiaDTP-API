@@ -2,5 +2,5 @@ fastapi
 uvicorn
 sqlalchemy
 openai
-pydantic
 databases
+psycopg2-binary
