@@ -1,145 +1,107 @@
 import sys
 import os
 import shutil
+import datetime
 from pathlib import Path
 from fastapi import FastAPI, Depends, File, UploadFile, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 import openai
 
-# ✅ 프로젝트 루트 경로 추가 (모듈 인식 문제 해결)
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# ✅ 내부 모듈 임포트
 from distopia_api.database import engine, Base, get_db
 from distopia_api.models import models
 
-# ✅ OpenAI API 키 설정 (GPT 사용 시 필요)
 OPENAI_API_KEY = "YOUR_OPENAI_API_KEY"
 
-# ✅ 데이터베이스 테이블 생성
 Base.metadata.create_all(bind=engine)
 
-# ✅ FastAPI 애플리케이션 생성
 app = FastAPI(
     title="DTP 세계 확장 API",
     description="이 API는 DTP 세계관을 확장하는 기능을 제공합니다.",
-    version="1.3"
+    version="1.5"
 )
 
-# ✅ **📌 ZIP 파일 업로드 기능**
 UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)  # 업로드 디렉토리 자동 생성
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-@app.post("/upload-zip/", summary="ZIP 파일 업로드", description="ZIP 파일을 업로드하여 서버에 저장하는 기능입니다.")
-async def upload_zip(file: UploadFile = File(...)):
-    if not file.filename.endswith(".zip"):
-        raise HTTPException(status_code=400, detail="ZIP 파일만 업로드할 수 있습니다.")
-    
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    return {"filename": file.filename, "message": "✅ ZIP 파일이 성공적으로 업로드 및 저장되었습니다!"}
+# ✅ **📌 데이터 개수 및 최근 업데이트 시간 확인 (`GET /data-info/`)**
+@app.get("/data-info/", summary="데이터 개수 및 최근 업데이트 시간 확인")
+def get_data_info(db: Session = Depends(get_db)):
+    char_count = db.query(models.Character).count()
+    species_count = db.query(models.Species).count()
+    region_count = db.query(models.Region).count()
 
-# ✅ **📌 업로드된 파일 목록 조회 API**
-@app.get("/uploaded-files/", summary="업로드된 파일 목록 조회", description="서버에 저장된 파일 목록을 반환합니다.")
-def list_uploaded_files():
-    try:
-        files = os.listdir(UPLOAD_DIR)
-        return {"uploaded_files": files}
-    except FileNotFoundError:
-        return {"error": "업로드 폴더가 존재하지 않습니다."}
+    latest_update = db.query(models.Character.updated_at).order_by(models.Character.updated_at.desc()).first()
+    latest_update_time = latest_update[0] if latest_update else "데이터 없음"
 
-# ✅ **📌 업로드된 파일 다운로드 API**
-@app.get("/download-file/{filename}/", summary="파일 다운로드", description="업로드된 ZIP 파일을 다운로드합니다.")
-def download_file(filename: str):
-    file_path = os.path.join(UPLOAD_DIR, filename)
-    if os.path.exists(file_path):
-        return FileResponse(file_path, filename=filename, media_type="application/zip")
-    return {"error": "파일을 찾을 수 없습니다."}
-
-# ✅ **📌 저장된 모든 데이터 JSON으로 반환 (`GET /all-data/`)**
-@app.get("/all-data/", summary="모든 저장된 데이터 조회", description="서버에 저장된 모든 데이터를 반환합니다.")
-def get_all_data(db: Session = Depends(get_db)):
-    characters = db.query(models.Character).all()
-    species = db.query(models.Species).all()
-    regions = db.query(models.Region).all()
-
-    data = {
-        "characters": [{"name": char.name, "species": char.species, "ability": char.ability, "attack_power": char.attack_power, "defense_power": char.defense_power} for char in characters],
-        "species": [{"name": spec.name, "description": spec.description, "abilities": spec.abilities} for spec in species],
-        "regions": [{"name": reg.name, "description": reg.description, "climate": reg.climate} for reg in regions]
+    return {
+        "캐릭터 개수": char_count,
+        "종족 개수": species_count,
+        "지역 개수": region_count,
+        "최근 업데이트 시간": latest_update_time
     }
-    return data
 
-# ✅ **📌 Markdown 형식으로 저장된 데이터 반환 (`GET /formatted-data/`)**
-@app.get("/formatted-data/", summary="서버 저장 데이터 보기", description="저장된 데이터를 Markdown 형식으로 변환하여 보기 쉽게 표시합니다.")
-def get_formatted_data(db: Session = Depends(get_db)):
-    characters = db.query(models.Character).all()
-    species = db.query(models.Species).all()
-    regions = db.query(models.Region).all()
+# ✅ **📌 검색 기능 (`GET /search-data/`)**
+@app.get("/search-data/", summary="데이터 검색", description="입력된 키워드로 저장된 데이터를 검색합니다.")
+def search_data(query: str, db: Session = Depends(get_db)):
+    characters = db.query(models.Character).filter(models.Character.name.contains(query)).all()
+    species = db.query(models.Species).filter(models.Species.name.contains(query)).all()
+    regions = db.query(models.Region).filter(models.Region.name.contains(query)).all()
 
-    markdown_data = "# 📜 저장된 데이터\n\n"
+    return {
+        "검색된 캐릭터": [{"이름": char.name, "종족": char.species, "능력": char.ability} for char in characters],
+        "검색된 종족": [{"이름": spec.name, "설명": spec.description, "능력": spec.abilities} for spec in species],
+        "검색된 지역": [{"이름": reg.name, "설명": reg.description, "기후": reg.climate} for reg in regions]
+    }
 
-    markdown_data += "## 🏅 캐릭터 목록\n"
-    for char in characters:
-        markdown_data += f"- **{char.name}** ({char.species})\n  - 🛠 능력: {char.ability}\n  - ⚔️ 공격력: {char.attack_power}, 🛡 방어력: {char.defense_power}\n\n"
+# ✅ **📌 특정 데이터 삭제 기능 (`DELETE /delete-data/{category}/{name}/`)**
+@app.delete("/delete-data/{category}/{name}/", summary="특정 데이터 삭제", description="캐릭터, 종족, 지역 등 특정 데이터를 삭제합니다.")
+def delete_data(category: str, name: str, db: Session = Depends(get_db)):
+    model_map = {
+        "character": models.Character,
+        "species": models.Species,
+        "region": models.Region
+    }
 
-    markdown_data += "## 🦊 종족 목록\n"
-    for spec in species:
-        markdown_data += f"- **{spec.name}**\n  - 설명: {spec.description}\n  - 🧬 능력: {spec.abilities}\n\n"
+    if category not in model_map:
+        raise HTTPException(status_code=400, detail="잘못된 카테고리. 'character', 'species', 'region' 중 선택하세요.")
 
-    markdown_data += "## 🌍 지역 목록\n"
-    for reg in regions:
-        markdown_data += f"- **{reg.name}**\n  - 🏞️ 설명: {reg.description}\n  - 🌦️ 기후: {reg.climate}\n\n"
+    deleted_item = db.query(model_map[category]).filter(model_map[category].name == name).first()
+    if not deleted_item:
+        raise HTTPException(status_code=404, detail=f"{category}에서 '{name}'을(를) 찾을 수 없습니다.")
 
-    return {"formatted_data": markdown_data}
+    db.delete(deleted_item)
+    db.commit()
+    return {"message": f"✅ {category}에서 '{name}'이(가) 삭제되었습니다."}
 
-# ✅ **📌 HTML 형식으로 저장된 데이터 보기 (`GET /visualized-data/`)**
-@app.get("/visualized-data/", summary="저장된 데이터를 HTML로 보기", response_class=HTMLResponse)
-def get_visualized_data(db: Session = Depends(get_db)):
-    characters = db.query(models.Character).all()
-    species = db.query(models.Species).all()
-    regions = db.query(models.Region).all()
+# ✅ **📌 GPT가 "기억해줘" 하면 자동으로 데이터베이스에 저장 (`POST /remember/`)**
+@app.post("/remember/", summary="GPT가 기억하는 데이터 저장", description="GPT의 데이터를 DB에 자동 저장합니다.")
+def remember_data(category: str, name: str, description: str, db: Session = Depends(get_db)):
+    model_map = {
+        "character": models.Character,
+        "species": models.Species,
+        "region": models.Region
+    }
 
-    html_content = """
-    <html>
-    <head>
-        <title>저장된 데이터 보기</title>
-        <style>
-            body { font-family: Arial, sans-serif; margin: 20px; padding: 20px; }
-            h1, h2 { color: #4A90E2; }
-            .section { margin-bottom: 20px; }
-            img { max-width: 300px; display: block; margin-top: 10px; }
-            video { max-width: 400px; display: block; margin-top: 10px; }
-        </style>
-    </head>
-    <body>
-        <h1>📜 저장된 데이터</h1>
-    """
+    if category not in model_map:
+        raise HTTPException(status_code=400, detail="잘못된 카테고리. 'character', 'species', 'region' 중 선택하세요.")
 
-    for char in characters:
-        html_content += f"<p><strong>{char.name}</strong> ({char.species})</p>"
-        html_content += f"<p>🛠 능력: {char.ability}</p>"
-        html_content += f"<p>⚔️ 공격력: {char.attack_power}, 🛡 방어력: {char.defense_power}</p>"
+    existing_item = db.query(model_map[category]).filter(model_map[category].name == name).first()
 
-    for spec in species:
-        html_content += f"<p><strong>{spec.name}</strong></p>"
-        html_content += f"<p>설명: {spec.description}</p>"
-        html_content += f"<p>🧬 능력: {spec.abilities}</p>"
+    if existing_item:
+        existing_item.description = description  # 기존 데이터 업데이트
+        db.commit()
+        db.refresh(existing_item)
+        return {"message": f"✅ 기존 {category} '{name}' 정보가 업데이트되었습니다."}
 
-    for reg in regions:
-        html_content += f"<p><strong>{reg.name}</strong></p>"
-        html_content += f"<p>🏞️ 설명: {reg.description}</p>"
-        html_content += f"<p>🌦️ 기후: {reg.climate}</p>"
+    new_item = model_map[category](name=name, description=description)
+    db.add(new_item)
+    db.commit()
+    db.refresh(new_item)
+    return {"message": f"✅ 새로운 {category} '{name}'이(가) 저장되었습니다."}
 
-    html_content += "</body></html>"
-    return HTMLResponse(content=html_content)
-
-# ✅ **🚀 Render 자동 포트 설정**
-import uvicorn
-
-if __name__ == "__main__":
-    PORT = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=True)
+# ✅ **📌 DisToPia 세계관 카테고리 채팅은 데이터베이스 내에서만 답변 (`POST /dtp-chat/`)**
+@app.post("/dtp-chat/", summary="DisToPia 세계관 내 질문", description="질문에 대한 답변을 데이터베이스에서 검색 후 반환합니다.")
+def dtp_chat(question: str, db: Session =
