@@ -8,11 +8,13 @@ from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy.orm import Session
 import openai
 
-# ====== RAG용 (langchain_community로 교체) ======
+# langchain_community 대신에:
 from langchain_community.chat_models import ChatOpenAI
-from langchain_community.chains import ConversationalRetrievalChain
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
+
+# ❗️ ConversationalRetrievalChain은 langchain_community에 아직 없으므로:
+from langchain.chains import ConversationalRetrievalChain
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -47,8 +49,10 @@ def get_chroma_client():
     if not api_key:
         raise ValueError("OPENAI_API_KEY가 설정되지 않았습니다.")
     
-    embeddings = OpenAIEmbeddings(model="text-embedding-ada-002", openai_api_key=api_key)
-
+    embeddings = OpenAIEmbeddings(
+        model="text-embedding-ada-002",
+        openai_api_key=api_key
+    )
     vectordb = Chroma(
         collection_name="distopia_collection",
         persist_directory="chroma_db",  # DB 데이터 저장 폴더
@@ -308,25 +312,27 @@ def delete_data(category: str, name: str, db: Session = Depends(get_db)):
 def add_rag_data(title: str, content: str):
     vectordb = get_chroma_client()
     vectordb.add_texts(texts=[content], metadatas=[{"title": title}])
-    vectordb.persist()  # 'chroma_db' 폴더에 영구 저장
+    vectordb.persist()
     return {"message": f"'{title}' 문서가 RAG DB에 추가되었습니다!"}
 
 @app.post("/rag/chat/", summary="RAG 기반 질의응답", description="Chroma DB에서 문서를 검색 후 GPT가 답변")
 def rag_chat(question: str, history: list = []):
     vectordb = get_chroma_client()
-    qa_chain = ConversationalRetrievalChain.from_llm(
+
+    # ❗️ ConversationalRetrievalChain은 langchain.chains에서 가져옴
+    chain = ConversationalRetrievalChain.from_llm(
         llm=ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0),
-        retriever=vectordb.as_retriever(search_kwargs={"k": 3}),  # 최대 3개 검색
+        retriever=vectordb.as_retriever(search_kwargs={"k": 3}),
     )
 
-    # history는 [userQ, aiA, userQ, aiA, ...] 배열로 가정
+    # history는 [userQ, aiA, userQ, aiA, ...]
     chat_history = []
     for i in range(0, len(history), 2):
         user_q = history[i]
         ai_a = history[i+1] if i+1 < len(history) else ""
         chat_history.append((user_q, ai_a))
 
-    result = qa_chain({"question": question, "chat_history": chat_history})
+    result = chain({"question": question, "chat_history": chat_history})
     return {"answer": result["answer"]}
 
 # =============================================================================
@@ -334,32 +340,27 @@ def rag_chat(question: str, history: list = []):
 # =============================================================================
 @app.post("/rag/session-chat/", summary="세션 기반 RAG 대화")
 def rag_session_chat(session_id: str, question: str):
-    """
-    session_id: 임의의 문자열(예: UUID). 동일 session_id로 여러 차례 호출하면 대화 맥락 유지.
-    question: 사용자 질문
-    """
     if session_id not in session_storage:
         session_storage[session_id] = []
 
     history = session_storage[session_id]
     vectordb = get_chroma_client()
 
-    qa_chain = ConversationalRetrievalChain.from_llm(
+    chain = ConversationalRetrievalChain.from_llm(
         llm=ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0),
         retriever=vectordb.as_retriever(search_kwargs={"k": 3}),
     )
 
-    # langchain 대화 형식으로 변환
+    # 기존 대화 = [(userQ, aiA), (userQ, aiA), ...]
     chat_history = []
     for i in range(0, len(history), 2):
         user_q = history[i]
         ai_a = history[i+1] if i+1 < len(history) else ""
         chat_history.append((user_q, ai_a))
 
-    result = qa_chain({"question": question, "chat_history": chat_history})
+    result = chain({"question": question, "chat_history": chat_history})
     answer = result["answer"]
 
-    # 세션에 저장 (userQ, aiA)
     session_storage[session_id].append(question)
     session_storage[session_id].append(answer)
 
