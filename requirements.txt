@@ -4,3 +4,4 @@ sqlalchemy
 openai
 databases
 psycopg2-binary
+python-multipart
