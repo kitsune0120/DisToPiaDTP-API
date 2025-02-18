@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
-from database import engine, Base, get_db
+from distopia_api.database import engine, Base, get_db
 import models
 import openai
 
