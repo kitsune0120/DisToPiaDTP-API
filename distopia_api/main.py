@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from distopia_api.database import engine, Base, get_db
-import models
+from distopia_api.models import *  # ✅ models.py를 올바르게 불러오기
 import openai
 
 # OpenAI API 키 설정 (GPT 사용 시 필요)
@@ -28,11 +28,11 @@ def home():
 # 📌 **캐릭터 데이터 API**
 @app.get("/characters/")
 def read_characters(db: Session = Depends(get_db)):
-    return db.query(models.Character).all()
+    return db.query(Character).all()
 
 @app.post("/characters/")
 def create_character(name: str, species: str, ability: str, attack_power: int, defense_power: int, battle_style: str, speech_pattern: str, db: Session = Depends(get_db)):
-    new_character = models.Character(
+    new_character = Character(
         name=name, species=species, ability=ability, attack_power=attack_power,
         defense_power=defense_power, battle_style=battle_style, speech_pattern=speech_pattern
     )
@@ -44,11 +44,11 @@ def create_character(name: str, species: str, ability: str, attack_power: int, d
 # 📌 **종족 데이터 API**
 @app.get("/species/")
 def read_species(db: Session = Depends(get_db)):
-    return db.query(models.Species).all()
+    return db.query(Species).all()
 
 @app.post("/species/")
 def create_species(name: str, description: str, abilities: str, db: Session = Depends(get_db)):
-    new_species = models.Species(name=name, description=description, abilities=abilities)
+    new_species = Species(name=name, description=description, abilities=abilities)
     db.add(new_species)
     db.commit()
     db.refresh(new_species)
@@ -57,11 +57,11 @@ def create_species(name: str, description: str, abilities: str, db: Session = De
 # 📌 **조직 및 세력 데이터 API**
 @app.get("/factions/")
 def read_factions(db: Session = Depends(get_db)):
-    return db.query(models.Faction).all()
+    return db.query(Faction).all()
 
 @app.post("/factions/")
 def create_faction(name: str, description: str, leader: str, db: Session = Depends(get_db)):
-    new_faction = models.Faction(name=name, description=description, leader=leader)
+    new_faction = Faction(name=name, description=description, leader=leader)
     db.add(new_faction)
     db.commit()
     db.refresh(new_faction)
@@ -70,11 +70,11 @@ def create_faction(name: str, description: str, leader: str, db: Session = Depen
 # 📌 **지역 데이터 API**
 @app.get("/locations/")
 def read_locations(db: Session = Depends(get_db)):
-    return db.query(models.Location).all()
+    return db.query(Location).all()
 
 @app.post("/locations/")
 def create_location(name: str, description: str, history: str, db: Session = Depends(get_db)):
-    new_location = models.Location(name=name, description=description, history=history)
+    new_location = Location(name=name, description=description, history=history)
     db.add(new_location)
     db.commit()
     db.refresh(new_location)
@@ -83,11 +83,11 @@ def create_location(name: str, description: str, history: str, db: Session = Dep
 # 📌 **기술 데이터 API**
 @app.get("/technologies/")
 def read_technologies(db: Session = Depends(get_db)):
-    return db.query(models.Technology).all()
+    return db.query(Technology).all()
 
 @app.post("/technologies/")
 def create_technology(name: str, category: str, description: str, db: Session = Depends(get_db)):
-    new_technology = models.Technology(name=name, category=category, description=description)
+    new_technology = Technology(name=name, category=category, description=description)
     db.add(new_technology)
     db.commit()
     db.refresh(new_technology)
@@ -96,11 +96,11 @@ def create_technology(name: str, category: str, description: str, db: Session = 
 # 📌 **역사적 사건 데이터 API**
 @app.get("/historical_events/")
 def read_events(db: Session = Depends(get_db)):
-    return db.query(models.HistoricalEvent).all()
+    return db.query(HistoricalEvent).all()
 
 @app.post("/historical_events/")
 def create_event(name: str, description: str, year: int, related_faction: int, db: Session = Depends(get_db)):
-    new_event = models.HistoricalEvent(name=name, description=description, year=year, related_faction=related_faction)
+    new_event = HistoricalEvent(name=name, description=description, year=year, related_faction=related_faction)
     db.add(new_event)
     db.commit()
     db.refresh(new_event)
@@ -109,11 +109,11 @@ def create_event(name: str, description: str, year: int, related_faction: int, d
 # 📌 **GPT 연동용 검색 API**
 @app.get("/search/")
 def search_data(query: str, db: Session = Depends(get_db)):
-    characters = db.query(models.Character).filter(models.Character.name.contains(query)).all()
-    species = db.query(models.Species).filter(models.Species.name.contains(query)).all()
-    factions = db.query(models.Faction).filter(models.Faction.name.contains(query)).all()
-    technologies = db.query(models.Technology).filter(models.Technology.name.contains(query)).all()
-    events = db.query(models.HistoricalEvent).filter(models.HistoricalEvent.name.contains(query)).all()
+    characters = db.query(Character).filter(Character.name.contains(query)).all()
+    species = db.query(Species).filter(Species.name.contains(query)).all()
+    factions = db.query(Faction).filter(Faction.name.contains(query)).all()
+    technologies = db.query(Technology).filter(Technology.name.contains(query)).all()
+    events = db.query(HistoricalEvent).filter(HistoricalEvent.name.contains(query)).all()
 
     return {
         "characters": characters,
@@ -137,7 +137,7 @@ def expand_species_request():
 
 @app.post("/expand/species/submit/")
 def submit_species(name: str, abilities: str, habitat: str, db: Session = Depends(get_db)):
-    new_species = models.Species(name=name, description=f"{name}은(는) {habitat}에서 살아가는 종족입니다.", abilities=abilities)
+    new_species = Species(name=name, description=f"{name}은(는) {habitat}에서 살아가는 종족입니다.", abilities=abilities)
     db.add(new_species)
     db.commit()
     db.refresh(new_species)
