@@ -7,6 +7,7 @@ from fastapi import FastAPI, Depends, File, UploadFile, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 import openai
+from dotenv import load_dotenv  # ✅ 환경 변수 로드
 
 # LangChain & ChromaDB
 from langchain_community.chat_models import ChatOpenAI
@@ -18,7 +19,13 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from distopia_api.database import engine, Base, get_db
 from distopia_api.models import models
 
-OPENAI_API_KEY = "YOUR_OPENAI_API_KEY"
+# ✅ 환경 변수 불러오기
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise HTTPException(status_code=500, detail="❌ OPENAI_API_KEY가 설정되지 않았습니다. `.env` 파일을 확인하세요.")
+
+# ✅ DB 초기화
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -36,89 +43,25 @@ session_storage = {}
 # ✅ ChromaDB 벡터 검색 (RAG)
 # =============================================================================
 def get_chroma_client():
-    api_key = os.getenv("OPENAI_API_KEY", OPENAI_API_KEY)
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY가 설정되지 않았습니다.")
-
-    embeddings = OpenAIEmbeddings(model="text-embedding-ada-002", openai_api_key=api_key)
+    embeddings = OpenAIEmbeddings(model="text-embedding-ada-002", openai_api_key=OPENAI_API_KEY)
     vectordb = Chroma(collection_name="distopia_collection", persist_directory="chroma_db", embedding_function=embeddings)
     return vectordb
 
 # =============================================================================
-# ✅ 파일 업로드 & 다운로드 (ZIP, 이미지, 영상)
+# ✅ 데이터베이스 세션 관리 개선
 # =============================================================================
-@app.post("/upload/")
-async def upload_file(file: UploadFile = File(...)):
-    ext = file.filename.split('.')[-1]
-    allowed_extensions = ["zip", "png", "jpg", "jpeg", "mp4", "avi"]
-    if ext not in allowed_extensions:
-        raise HTTPException(status_code=400, detail="지원되지 않는 파일 형식입니다.")
-
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    return {"filename": file.filename, "message": "✅ 업로드 완료"}
-
-@app.get("/files/")
-def list_files():
+def get_db_safe():
+    db = next(get_db())
     try:
-        files = os.listdir(UPLOAD_DIR)
-        return {"files": files}
-    except FileNotFoundError:
-        return {"error": "업로드 폴더가 없습니다."}
-
-@app.get("/download/{filename}/")
-def download_file(filename: str):
-    file_path = os.path.join(UPLOAD_DIR, filename)
-    if os.path.exists(file_path):
-        return FileResponse(file_path, filename=filename)
-    return {"error": "파일을 찾을 수 없습니다."}
+        yield db
+    finally:
+        db.close()
 
 # =============================================================================
-# ✅ DB 데이터 조회 (JSON, Markdown, HTML)
-# =============================================================================
-@app.get("/all-data/")
-def get_all_data(db: Session = Depends(get_db)):
-    characters = db.query(models.Character).all()
-    species = db.query(models.Species).all()
-    regions = db.query(models.Region).all()
-
-    data = {
-        "characters": [{"name": c.name, "species": c.species} for c in characters],
-        "species": [{"name": s.name, "description": s.description} for s in species],
-        "regions": [{"name": r.name, "description": r.description} for r in regions]
-    }
-    return data
-
-@app.get("/visual-data/", response_class=HTMLResponse)
-def get_visual_data(db: Session = Depends(get_db)):
-    characters = db.query(models.Character).all()
-    species = db.query(models.Species).all()
-    regions = db.query(models.Region).all()
-
-    html = "<html><head><title>저장된 데이터</title></head><body><h1>📜 저장된 데이터</h1>"
-
-    html += "<h2>🏅 캐릭터 목록</h2>"
-    for c in characters:
-        html += f"<p><strong>{c.name}</strong> ({c.species})</p>"
-
-    html += "<h2>🦊 종족 목록</h2>"
-    for s in species:
-        html += f"<p><strong>{s.name}</strong> - {s.description}</p>"
-
-    html += "<h2>🌍 지역 목록</h2>"
-    for r in regions:
-        html += f"<p><strong>{r.name}</strong> - {r.description}</p>"
-
-    html += "</body></html>"
-    return html
-
-# =============================================================================
-# ✅ 검색 API (AI 지원)
+# ✅ FastAPI API 엔드포인트
 # =============================================================================
 @app.get("/search/")
-def search_data(query: str, db: Session = Depends(get_db)):
+def search_data(query: str, db: Session = Depends(get_db_safe)):
     response = ""
     
     characters = db.query(models.Character).filter(models.Character.name.contains(query)).all()
@@ -135,22 +78,16 @@ def search_data(query: str, db: Session = Depends(get_db)):
     
     return {"message": response if response else "❌ 관련 정보 없음"}
 
-# =============================================================================
-# ✅ AI 기반 대화 (GPT + RAG)
-# =============================================================================
 @app.post("/chat/")
-def chat_with_gpt(question: str, db: Session = Depends(get_db)):
+def chat_with_gpt(question: str, db: Session = Depends(get_db_safe)):
     vectordb = get_chroma_client()
     rag_chain = ConversationalRetrievalChain.from_llm(ChatOpenAI(model_name="gpt-4", openai_api_key=OPENAI_API_KEY), vectordb.as_retriever())
     
     result = rag_chain.run({"question": question})
     return {"response": result}
 
-# =============================================================================
-# ✅ 데이터 개수 및 최근 업데이트 확인
-# =============================================================================
 @app.get("/stats/")
-def get_data_stats(db: Session = Depends(get_db)):
+def get_data_stats(db: Session = Depends(get_db_safe)):
     char_count = db.query(models.Character).count()
     species_count = db.query(models.Species).count()
     region_count = db.query(models.Region).count()
@@ -169,4 +106,5 @@ def get_data_stats(db: Session = Depends(get_db)):
 # =============================================================================
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))  # ✅ Render 호환성 개선
+    uvicorn.run(app, host="0.0.0.0", port=port, workers=4, keepalive=10)
