@@ -3,7 +3,7 @@ from fastapi import FastAPI, Depends, File, UploadFile, HTTPException
 from sqlalchemy.orm import Session
 from distopia_api.database import engine, Base, get_db
 from pathlib import Path
-import models
+from distopia_api.models import models
 import openai
 
 # OpenAI API 키 설정 (GPT 사용 시 필요)
