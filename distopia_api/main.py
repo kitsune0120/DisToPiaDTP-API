@@ -29,6 +29,9 @@ if not OPENAI_API_KEY:
 if not DATABASE_URL:
     raise HTTPException(status_code=500, detail="❌ DATABASE_URL이 설정되지 않았습니다.")
 
+# 디버그용: 현재 설정된 DATABASE_URL 출력
+print(f"📌 현재 설정된 DATABASE_URL: {DATABASE_URL}")
+
 # =============================================================================
 # 2) FastAPI 앱 설정
 # =============================================================================
@@ -55,12 +58,13 @@ def get_chroma_client():
     return vectordb
 
 # =============================================================================
-# 4) PostgreSQL 연결 함수
+# 4) PostgreSQL 연결 함수 (디버그 로그 추가)
 # =============================================================================
 def get_db_connection():
     try:
+        print("🔍 DB 연결 시도 중...")
         conn = psycopg2.connect(DATABASE_URL)
-        print("데이터베이스에 성공적으로 연결되었습니다!")
+        print("✅ 데이터베이스에 성공적으로 연결되었습니다!")
         return conn
     except Exception as e:
         print("❌ 데이터베이스 연결 실패:", e)
@@ -173,3 +177,15 @@ def chat(query: str, history: list = Query(default=[])):
     # chain에 question과 기존 대화(history)를 넣어 답변 생성
     result = chain({"question": query, "chat_history": history})
     return {"response": result["answer"]}
+
+# =============================================================================
+# 새로 추가: DB 연결 테스트 엔드포인트
+# =============================================================================
+@app.get("/test-db")
+def test_db():
+    conn = get_db_connection()
+    if conn:
+        conn.close()
+        return {"message": "DB 연결 성공"}
+    else:
+        return {"error": "DB 연결 실패"}
