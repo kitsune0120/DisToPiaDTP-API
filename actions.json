@@ -1,0 +1,17 @@
+{
+    "servers": [
+      {
+        "url": "https://distopiadtp-api.onrender.com"
+      }
+    ],
+    "actions": [
+      {
+        "name": "get_api_status",
+        "description": "Check if the DisToPia API is running",
+        "method": "GET",
+        "endpoint": "/",
+        "response_type": "json"
+      }
+    ]
+  }
+  
