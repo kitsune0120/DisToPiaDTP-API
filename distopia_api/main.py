@@ -60,6 +60,7 @@ def get_chroma_client():
 def get_db_connection():
     try:
         conn = psycopg2.connect(DATABASE_URL)
+        print("데이터베이스에 성공적으로 연결되었습니다!")
         return conn
     except Exception as e:
         print("❌ 데이터베이스 연결 실패:", e)
