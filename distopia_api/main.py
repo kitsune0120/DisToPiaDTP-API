@@ -1,33 +1,21 @@
-import sys
 import os
 import shutil
-import datetime
-from pathlib import Path
 from fastapi import FastAPI, Depends, File, UploadFile, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
-import openai
-from dotenv import load_dotenv  # ✅ 환경 변수 로드
-
-# LangChain & ChromaDB
+from dotenv import load_dotenv
 from langchain_community.chat_models import ChatOpenAI
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain.chains import ConversationalRetrievalChain
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from distopia_api.database import engine, Base, get_db
-from distopia_api.models import models
-
-# ✅ 환경 변수 불러오기
+# ✅ 환경 변수 로드
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
-    raise HTTPException(status_code=500, detail="❌ OPENAI_API_KEY가 설정되지 않았습니다. `.env` 파일을 확인하세요.")
+    raise HTTPException(status_code=500, detail="❌ OPENAI_API_KEY가 설정되지 않았습니다.")
 
-# ✅ DB 초기화
-Base.metadata.create_all(bind=engine)
-
+# ✅ FastAPI 설정
 app = FastAPI(
     title="DisToPia API",
     description="DTP 세계관 API (DB + AI + RAG + 파일 관리)",
@@ -37,7 +25,12 @@ app = FastAPI(
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-session_storage = {}
+# =============================================================================
+# ✅ 기본 경로 (404 오류 해결)
+# =============================================================================
+@app.get("/")
+def root():
+    return {"message": "DisToPia API is running! 🚀"}
 
 # =============================================================================
 # ✅ ChromaDB 벡터 검색 (RAG)
@@ -48,63 +41,60 @@ def get_chroma_client():
     return vectordb
 
 # =============================================================================
-# ✅ 데이터베이스 세션 관리 개선
+# ✅ 파일 업로드 & 다운로드 API
 # =============================================================================
-def get_db_safe():
-    db = next(get_db())
+@app.post("/upload/")
+async def upload_file(file: UploadFile = File(...)):
+    ext = file.filename.split('.')[-1]
+    allowed_extensions = ["zip", "png", "jpg", "jpeg", "mp4", "avi"]
+    if ext not in allowed_extensions:
+        raise HTTPException(status_code=400, detail="지원되지 않는 파일 형식입니다.")
+
+    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    return {"filename": file.filename, "message": "✅ 업로드 완료"}
+
+@app.get("/files/")
+def list_files():
     try:
-        yield db
-    finally:
-        db.close()
+        files = os.listdir(UPLOAD_DIR)
+        return {"files": files}
+    except FileNotFoundError:
+        return {"error": "❌ 업로드 폴더가 없습니다."}
+
+@app.get("/download/{filename}/")
+def download_file(filename: str):
+    file_path = os.path.join(UPLOAD_DIR, filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path, filename=filename)
+    return {"error": "❌ 파일을 찾을 수 없습니다."}
 
 # =============================================================================
-# ✅ FastAPI API 엔드포인트
+# ✅ AI 기반 대화 (GPT-4 + LangChain)
 # =============================================================================
-@app.get("/search/")
-def search_data(query: str, db: Session = Depends(get_db_safe)):
-    response = ""
-    
-    characters = db.query(models.Character).filter(models.Character.name.contains(query)).all()
-    if characters:
-        response += "📌 캐릭터 정보:\n" + "".join(f"- {c.name} ({c.species})\n" for c in characters)
-    
-    species = db.query(models.Species).filter(models.Species.name.contains(query)).all()
-    if species:
-        response += "📌 종족 정보:\n" + "".join(f"- {s.name}: {s.description}\n" for s in species)
-    
-    regions = db.query(models.Region).filter(models.Region.name.contains(query)).all()
-    if regions:
-        response += "📌 지역 정보:\n" + "".join(f"- {r.name}: {r.description}\n" for r in regions)
-    
-    return {"message": response if response else "❌ 관련 정보 없음"}
-
 @app.post("/chat/")
-def chat_with_gpt(question: str, db: Session = Depends(get_db_safe)):
+def chat_with_gpt(question: str):
     vectordb = get_chroma_client()
     rag_chain = ConversationalRetrievalChain.from_llm(ChatOpenAI(model_name="gpt-4", openai_api_key=OPENAI_API_KEY), vectordb.as_retriever())
     
     result = rag_chain.run({"question": question})
     return {"response": result}
 
-@app.get("/stats/")
-def get_data_stats(db: Session = Depends(get_db_safe)):
-    char_count = db.query(models.Character).count()
-    species_count = db.query(models.Species).count()
-    region_count = db.query(models.Region).count()
-    latest = db.query(models.Character.updated_at).order_by(models.Character.updated_at.desc()).first()
-    latest_update_time = latest[0] if latest else "데이터 없음"
-    
-    return {
-        "characters": char_count,
-        "species": species_count,
-        "regions": region_count,
-        "last_update": latest_update_time
-    }
+# =============================================================================
+# ✅ DB 검색 API
+# =============================================================================
+@app.get("/search/")
+def search_data(query: str):
+    vectordb = get_chroma_client()
+    search_results = vectordb.similarity_search(query, k=5)
+    return {"results": [doc.page_content for doc in search_results]}
 
 # =============================================================================
-# ✅ FastAPI 실행 (로컬 & Render 배포 지원)
+# ✅ FastAPI 실행 (Render 배포 최적화)
 # =============================================================================
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8000))  # ✅ Render 호환성 개선
-    uvicorn.run(app, host="0.0.0.0", port=port, workers=4, keepalive=10)
+    port = int(os.getenv("PORT", 8000))  # Render에서 자동 감지
+    uvicorn.run(app, host="0.0.0.0", port=port)
