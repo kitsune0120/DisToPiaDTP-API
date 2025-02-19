@@ -1,0 +1,19 @@
+{
+    "schema_version": "v1",
+    "name_for_human": "Dystopia API",
+    "name_for_model": "dystopia_plugin",
+    "description_for_human": "A plugin to interact with the Dystopia system.",
+    "description_for_model": "Use this plugin to fetch actions from the Dystopia API.",
+    "auth": {
+      "type": "none"
+    },
+    "api": {
+      "type": "openapi",
+      "url": "https://distopia-schema.onrender.com/openapi.json",
+      "is_user_authenticated": false
+    },
+    "logo_url": "https://distopia-schema.onrender.com/logo.png",
+    "contact_email": "support@yourdomain.com",
+    "legal_info_url": "https://distopia-schema.onrender.com/legal"
+  }
+  

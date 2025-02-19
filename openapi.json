@@ -1,0 +1,42 @@
+{
+    "openapi": "3.0.1",
+    "info": {
+      "title": "Dystopia API",
+      "version": "1.0.0",
+      "description": "This API provides various functionalities for the Dystopia system."
+    },
+    "servers": [
+      {
+        "url": "https://distopia-schema.onrender.com"
+      }
+    ],
+    "paths": {
+      "/actions.json": {
+        "get": {
+          "summary": "Get all actions",
+          "operationId": "getActions",
+          "responses": {
+            "200": {
+              "description": "A list of actions",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "string" },
+                        "name": { "type": "string" },
+                        "description": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  
