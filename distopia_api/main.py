@@ -306,6 +306,46 @@ def update_personalization(user: str, preferences: str):
     # 실제로는 사용자의 선호 정보를 DB나 별도 스토리지에 저장하여 학습에 반영합니다.
     return {"message": f"{user}님의 개인화 설정이 업데이트되었습니다.", "preferences": preferences}
 
+# 백업 폴더 생성 (없으면 자동 생성)
+BACKUP_DIR = "D:/backup"
+os.makedirs(BACKUP_DIR, exist_ok=True)
+
+# 대화 내용 백업 (자동 저장)
+@app.post("/backup-memory")
+def backup_memory(user_id: str, query: str, response: str):
+    try:
+        backup_file = os.path.join(BACKUP_DIR, "memory_logs.txt")
+        with open(backup_file, "a", encoding="utf-8") as file:
+            file.write(f"{datetime.now()} - User: {user_id}, Query: {query}, Response: {response}\n")
+        return {"message": "✅ 대화 내용이 백업되었습니다!"}
+    except Exception as e:
+        return {"error": f"백업 실패: {e}"}
+
+def get_db_connection():
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        return conn
+    except Exception as e:
+        print(f"❌ 데이터베이스 연결 실패: {e}")
+        return None
+
+# DB 백업 (자동 저장)
+@app.get("/backup-db")
+def backup_db():
+    try:
+        backup_file = os.path.join(BACKUP_DIR, "db_backup.sql")
+        conn = get_db_connection()
+        if not conn:
+            return {"error": "DB 연결 실패"}
+        cursor = conn.cursor()
+        with open(backup_file, "w", encoding="utf-8") as file:
+            cursor.copy_expert("COPY dtp_data TO STDOUT WITH CSV HEADER", file)
+        cursor.close()
+        conn.close()
+        return {"message": f"✅ 데이터베이스가 백업되었습니다! 파일: {backup_file}"}
+    except Exception as e:
+        return {"error": f"DB 백업 실패: {e}"}
+
 # 앱 시작
 if __name__ == "__main__":
     import uvicorn
