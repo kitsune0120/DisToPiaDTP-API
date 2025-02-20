@@ -6,7 +6,7 @@ import random
 from datetime import datetime, timedelta
 from typing import List
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Depends, Request, Body
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Depends, Request, Body, Header
 from fastapi.responses import FileResponse
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
@@ -78,15 +78,23 @@ def create_access_token(data: dict, expires_delta: timedelta = timedelta(hours=1
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm="HS256")
     return encoded_jwt
 
-def fake_verify_token(token: str = Depends(oauth2_scheme)):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        username: str = payload.get("sub")
-        if username is None:
+# 기존의 인증 의존성을 "옵셔널 인증"으로 변경합니다.
+async def optional_verify_token(authorization: str = Header(None)):
+    if authorization:
+        try:
+            scheme, token = authorization.split()
+            if scheme.lower() != "bearer":
+                raise HTTPException(status_code=401, detail="Invalid authentication scheme")
+            payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            username = payload.get("sub")
+            if username is None:
+                raise HTTPException(status_code=401, detail="Invalid token")
+            return {"sub": username}
+        except Exception as e:
             raise HTTPException(status_code=401, detail="Invalid token")
-        return {"sub": username}
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    else:
+        # 토큰이 없으면 테스트용으로 anonymous로 처리합니다.
+        return {"sub": "anonymous"}
 
 # -------------------------------
 # 로그인 엔드포인트 (자동으로 토큰 발급)
@@ -157,10 +165,10 @@ def create_table():
     return {"message": "✅ dtp_data 테이블 생성 완료!"}
 
 # -------------------------------
-# DB 데이터 추가
+# DB 데이터 추가 (인증이 없으면 anonymous 사용자로 처리)
 # -------------------------------
 @app.post("/add-data")
-def add_data(name: str, description: str, user: dict = Depends(fake_verify_token)):
+def add_data(name: str, description: str, user: dict = Depends(optional_verify_token)):
     logger.info(f"POST /add-data 요청 받음. 사용자: {user['sub']}")
     conn = get_db_connection()
     if not conn:
@@ -200,7 +208,7 @@ def get_data():
 # DB 데이터 업데이트
 # -------------------------------
 @app.put("/update-data/{data_id}")
-def update_data(data_id: int, name: str, description: str, user: dict = Depends(fake_verify_token)):
+def update_data(data_id: int, name: str, description: str, user: dict = Depends(optional_verify_token)):
     logger.info(f"PUT /update-data/{data_id} 요청 받음. 사용자: {user['sub']}")
     conn = get_db_connection()
     if not conn:
@@ -216,7 +224,7 @@ def update_data(data_id: int, name: str, description: str, user: dict = Depends(
 # DB 데이터 삭제
 # -------------------------------
 @app.delete("/delete-data/{data_id}")
-def delete_data(data_id: int, user: dict = Depends(fake_verify_token)):
+def delete_data(data_id: int, user: dict = Depends(optional_verify_token)):
     logger.info(f"DELETE /delete-data/{data_id} 요청 받음. 사용자: {user['sub']}")
     conn = get_db_connection()
     if not conn:
