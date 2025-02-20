@@ -341,7 +341,7 @@ def ai_plugin_manifest():
         "api": {
   "type": "openapi",
   "url": "https://distopiadtp-api.onrender.com/openapi.json",
-  "is_user_authenticated": false
+  "is_user_authenticated": False
 },
 "logo_url": "https://distopiadtp-api.onrender.com/logo.png",
 "contact_email": "support@yourdomain.com",
