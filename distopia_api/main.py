@@ -43,10 +43,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key")  # JWT 발급용 비밀키
 
-# 운영 시 민감 정보 출력은 주석 처리하거나 제거할 것
-# print(f"📌 현재 설정된 OPENAI_API_KEY: {OPENAI_API_KEY}")
-# print(f"📌 현재 설정된 DATABASE_URL: {DATABASE_URL}")
-
+# 운영 시 민감 정보 출력은 주석 처리
 if not OPENAI_API_KEY:
     raise HTTPException(status_code=500, detail="❌ OPENAI_API_KEY가 설정되지 않았습니다.")
 if not DATABASE_URL:
@@ -156,7 +153,7 @@ def load_object_detection_model():
     global object_detector, object_processor
     if object_detector is None:
         logger.info("🔍 객체 감지 모델 로딩 중...")
-        # DETR 모델 예시 (실제 사용 시 하드웨어에 맞춰 최적화 필요)
+        # DETR 모델 예시
         object_processor = DetrImageProcessor.from_pretrained("facebook/detr-resnet-50")
         object_detector = DetrForObjectDetection.from_pretrained("facebook/detr-resnet-50")
         logger.info("✅ 객체 감지 모델 로딩 완료!")
@@ -213,10 +210,9 @@ def analyze_image(file_path: str) -> str:
             # 객체 감지 (간단 예시)
             inputs = object_processor(images=img, return_tensors="pt")
             outputs = object_detector(**inputs)
-            # 수정된 부분: id2label 매핑을 통해 정수 인덱스를 레이블로 변환
-            pred_logits = outputs.logits  # (batch_size, num_queries, num_classes)
-            pred_classes = pred_logits.argmax(dim=-1)  # (batch_size, num_queries)
-            top_indices = pred_classes[0][:3].tolist()  # 첫 번째 배치의 상위 3개 결과
+            pred_logits = outputs.logits
+            pred_classes = pred_logits.argmax(dim=-1)
+            top_indices = pred_classes[0][:3].tolist()  # 상위 3개 결과
             labels = [object_detector.config.id2label.get(idx, str(idx)) for idx in top_indices]
             detected = "객체: " + ", ".join(labels)
             result += f"[객체 감지] {detected}"
@@ -225,10 +221,8 @@ def analyze_image(file_path: str) -> str:
     return result
 
 def analyze_video(file_path: str) -> str:
-    # 동영상에서 일정 간격으로 프레임을 추출 후 이미지 분석 수행
     captions = []
     try:
-        # 프레임 추출: 예시로 10초마다 한 프레임 추출 (실제는 동영상 길이에 따라 조정)
         probe = ffmpeg.probe(file_path)
         duration = float(probe['format']['duration'])
         num_frames = int(duration // 10)
@@ -241,11 +235,9 @@ def analyze_video(file_path: str) -> str:
                 .overwrite_output()
                 .run(quiet=True)
             )
-            # 이미지 분석: 캡션 생성 (객체 감지도 가능)
             cap = analyze_image(out_file)
             captions.append(cap)
-            os.remove(out_file)  # 임시 프레임 파일 삭제
-        # 종합 요약 (여기서는 단순 연결; 실제로는 LLM을 활용한 요약 가능)
+            os.remove(out_file)
         summary = " | ".join(captions)
         return f"[동영상 요약] {summary}"
     except Exception as e:
@@ -267,7 +259,7 @@ def analyze_file_content(file_path: str) -> str:
         return f"[미지원] {ext} 확장자는 현재 지원되지 않습니다."
 
 # -------------------------------
-# 기본 라우트 (테스트용)
+# 기본 엔드포인트
 # -------------------------------
 @app.get("/")
 def root():
@@ -360,7 +352,7 @@ def delete_data(data_id: int, user: dict = Depends(optional_verify_token)):
 async def upload_file(file: UploadFile = File(...)):
     logger.info("POST /upload/ 요청 받음.")
     try:
-        # 파일명 안전 처리: 클라이언트가 전달한 파일명을 sanitize 함
+        # 파일명 안전 처리
         safe_filename = secure_filename(file.filename)
         file_path = os.path.join(UPLOAD_DIR, safe_filename)
         if os.path.exists(file_path):
@@ -403,7 +395,7 @@ async def upload_file(file: UploadFile = File(...)):
                 "extracted_dir": extract_dir
             }
         else:
-            # 단일 파일 처리: 모든 확장자 지원 (txt, pdf, docx, 이미지, 동영상 등)
+            # 단일 파일 처리
             content = analyze_file_content(file_path)
             conn = get_db_connection()
             if not conn:
@@ -499,8 +491,6 @@ def game_status():
     logger.info("GET /game-status 요청 받음.")
     status = {"players": random.randint(1, 100), "score": random.randint(0, 1000), "status": "running"}
     return {"game_status": status}
-
-# (기타 성장형 피드백, 개인화 업데이트, 백업 API 등은 기존 코드 유지)
 
 if __name__ == "__main__":
     import uvicorn
