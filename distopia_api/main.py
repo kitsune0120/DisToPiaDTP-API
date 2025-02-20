@@ -63,6 +63,29 @@ fake_users_db = {
     }
 }
 
+@app.get("/.well-known/ai-plugin.json", include_in_schema=False)
+def ai_plugin_manifest():
+    return {
+        "schema_version": "v1",
+        "name_for_human": "Dystopia API",
+        "name_for_model": "dystopia_plugin",
+        "description_for_human": "A plugin to interact with the Dystopia system.",
+        "description_for_model": "Use this plugin to fetch actions from the Dystopia API.",
+        "auth": {
+            "type": "none"
+        },
+        "api": {
+            "type": "openapi",
+            # 여기에 실제 openapi.json 주소를 적어주세요. 예: http://127.0.0.1:8000/openapi.json
+            "url": "http://127.0.0.1:8000/openapi.json",
+            "is_user_authenticated": False
+        },
+        "logo_url": "http://127.0.0.1:8000/logo.png",  # 원하는 로고 이미지 URL
+        "contact_email": "support@yourdomain.com",
+        "legal_info_url": "http://127.0.0.1:8000/legal"
+    }
+
+
 # JWT 토큰 생성 함수
 def create_access_token(data: dict, expires_delta: timedelta = timedelta(hours=1)):
     to_encode = data.copy()
