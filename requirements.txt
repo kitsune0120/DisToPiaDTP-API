@@ -13,4 +13,6 @@ pyjwt
 ffmpeg-python
 PyPDF2
 python-docx
+transformers
+torch
 
