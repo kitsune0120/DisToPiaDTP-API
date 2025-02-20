@@ -383,31 +383,20 @@ def get_actions_json():
     actions_schema = {
         "version": "1.0",
         "actions": [
-            # root
             {
                 "name": "root",
                 "description": "Basic test route",
                 "endpoint": "/",
                 "method": "GET",
-                "parameters": {
-                    "type": "object",
-                    "properties": {},
-                    "required": []
-                }
+                "parameters": {"type": "object", "properties": {}, "required": []}
             },
-            # create-table
             {
                 "name": "createTable",
                 "description": "Create the dtp_data table",
                 "endpoint": "/create-table",
                 "method": "GET",
-                "parameters": {
-                    "type": "object",
-                    "properties": {},
-                    "required": []
-                }
+                "parameters": {"type": "object", "properties": {}, "required": []}
             },
-            # add-data
             {
                 "name": "addData",
                 "description": "Add data to the DTP world",
@@ -422,19 +411,13 @@ def get_actions_json():
                     "required": ["name", "description"]
                 }
             },
-            # get-data
             {
                 "name": "getData",
                 "description": "Retrieve DTP data list",
                 "endpoint": "/get-data",
                 "method": "GET",
-                "parameters": {
-                    "type": "object",
-                    "properties": {},
-                    "required": []
-                }
+                "parameters": {"type": "object", "properties": {}, "required": []}
             },
-            # update-data
             {
                 "name": "updateData",
                 "description": "Update data by ID",
@@ -450,7 +433,6 @@ def get_actions_json():
                     "required": ["data_id", "name", "description"]
                 }
             },
-            # delete-data
             {
                 "name": "deleteData",
                 "description": "Delete data by ID",
@@ -464,7 +446,6 @@ def get_actions_json():
                     "required": ["data_id"]
                 }
             },
-            # upload
             {
                 "name": "uploadFile",
                 "description": "Upload a file",
@@ -478,7 +459,6 @@ def get_actions_json():
                     "required": ["file"]
                 }
             },
-            # download
             {
                 "name": "downloadFile",
                 "description": "Download a file by filename",
@@ -492,7 +472,6 @@ def get_actions_json():
                     "required": ["filename"]
                 }
             },
-            # chat
             {
                 "name": "chatRAG",
                 "description": "RAG 기반 대화 API",
@@ -511,7 +490,6 @@ def get_actions_json():
                     "required": ["query"]
                 }
             },
-            # generate-lyrics
             {
                 "name": "generateLyrics",
                 "description": "노래 가사 생성 API",
@@ -525,7 +503,6 @@ def get_actions_json():
                     "required": ["theme"]
                 }
             },
-            # generate-song
             {
                 "name": "generateSong",
                 "description": "노래(가사+구조) 생성 API",
@@ -539,7 +516,6 @@ def get_actions_json():
                     "required": ["theme"]
                 }
             },
-            # discord-bot
             {
                 "name": "discordBotCommand",
                 "description": "Discord 봇 명령 테스트",
@@ -553,7 +529,6 @@ def get_actions_json():
                     "required": ["command"]
                 }
             },
-            # rp-event
             {
                 "name": "rpEvent",
                 "description": "RP 이벤트 생성",
@@ -567,19 +542,13 @@ def get_actions_json():
                     "required": ["event"]
                 }
             },
-            # game-status
             {
                 "name": "gameStatus",
                 "description": "게임 상태 조회",
                 "endpoint": "/game-status",
                 "method": "GET",
-                "parameters": {
-                    "type": "object",
-                    "properties": {},
-                    "required": []
-                }
+                "parameters": {"type": "object", "properties": {}, "required": []}
             },
-            # growth-feedback
             {
                 "name": "growthFeedback",
                 "description": "사용자 피드백 저장",
@@ -594,7 +563,6 @@ def get_actions_json():
                     "required": ["user", "feedback"]
                 }
             },
-            # update-personalization
             {
                 "name": "updatePersonalization",
                 "description": "사용자 개인화 설정 업데이트",
@@ -609,7 +577,6 @@ def get_actions_json():
                     "required": ["user", "preferences"]
                 }
             },
-            # backup-memory
             {
                 "name": "backupMemory",
                 "description": "대화 내용 백업",
@@ -625,17 +592,12 @@ def get_actions_json():
                     "required": ["user_id", "query", "response"]
                 }
             },
-            # backup-db
             {
                 "name": "backupDB",
                 "description": "DB 백업",
                 "endpoint": "/backup-db",
                 "method": "GET",
-                "parameters": {
-                    "type": "object",
-                    "properties": {},
-                    "required": []
-                }
+                "parameters": {"type": "object", "properties": {}, "required": []}
             }
         ]
     }
