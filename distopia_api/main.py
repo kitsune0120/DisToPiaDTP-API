@@ -222,15 +222,23 @@ def delete_data(data_id: int, user: dict = Depends(fake_verify_token)):
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
     logger.info("POST /upload/ 요청 받음.")
-    # 확장자 체크 제거: 모든 파일 형식을 허용합니다.
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
-    if os.path.exists(file_path):
-        base, extension = os.path.splitext(file.filename)
-        new_filename = f"{base}_{int(time.time())}{extension}"
-        file_path = os.path.join(UPLOAD_DIR, new_filename)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    try:
+        # 파일 경로 지정: 이미 같은 이름의 파일이 있으면 새로운 이름 생성
+        file_path = os.path.join(UPLOAD_DIR, file.filename)
+        if os.path.exists(file_path):
+            base, extension = os.path.splitext(file.filename)
+            new_filename = f"{base}_{int(time.time())}{extension}"
+            file_path = os.path.join(UPLOAD_DIR, new_filename)
+        
+        # 파일 저장 시도
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        logger.error("파일 저장 중 에러 발생: %s", e)
+        raise HTTPException(status_code=500, detail="파일 업로드에 실패했습니다.")
+    
     return {"filename": os.path.basename(file_path), "message": "파일 업로드 성공!"}
+
 
 # -------------------------------
 # 파일 다운로드 API
