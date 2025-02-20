@@ -5,7 +5,7 @@ import logging
 import random
 import io
 import zipfile
-import re  # 파일명 sanitize를 위해 추가
+import re  # 파일명 안전 처리를 위해 추가
 from datetime import datetime, timedelta
 from typing import List
 
@@ -43,7 +43,6 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key")  # JWT 발급용 비밀키
 
-# 운영 시 민감 정보 출력은 주석 처리
 if not OPENAI_API_KEY:
     raise HTTPException(status_code=500, detail="❌ OPENAI_API_KEY가 설정되지 않았습니다.")
 if not DATABASE_URL:
@@ -123,6 +122,38 @@ def get_db_connection():
         return None
 
 # -------------------------------
+# DB 테이블 생성 (dtp_data와 conversation)
+# -------------------------------
+@app.get("/create-table")
+def create_table():
+    logger.info("GET /create-table 요청 받음.")
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="DB 연결 실패")
+    cursor = conn.cursor()
+    # dtp_data 테이블 생성
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS dtp_data (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT
+        );
+    """)
+    # conversation 테이블 생성
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS conversation (
+            id SERIAL PRIMARY KEY,
+            question TEXT NOT NULL,
+            answer TEXT NOT NULL,
+            created_at TIMESTAMP NOT NULL
+        );
+    """)
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return {"message": "✅ dtp_data 및 conversation 테이블 생성 완료!"}
+
+# -------------------------------
 # ChromaDB (RAG) 세팅
 # -------------------------------
 def get_chroma_client():
@@ -153,7 +184,6 @@ def load_object_detection_model():
     global object_detector, object_processor
     if object_detector is None:
         logger.info("🔍 객체 감지 모델 로딩 중...")
-        # DETR 모델 예시
         object_processor = DetrImageProcessor.from_pretrained("facebook/detr-resnet-50")
         object_detector = DetrForObjectDetection.from_pretrained("facebook/detr-resnet-50")
         logger.info("✅ 객체 감지 모델 로딩 완료!")
@@ -259,6 +289,39 @@ def analyze_file_content(file_path: str) -> str:
         return f"[미지원] {ext} 확장자는 현재 지원되지 않습니다."
 
 # -------------------------------
+# 대화 내용을 DB에 저장하는 함수
+# -------------------------------
+def save_conversation(question: str, answer: str):
+    conn = get_db_connection()
+    if not conn:
+        logger.error("DB 연결 실패, 대화 저장 안됨")
+        return
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO conversation (question, answer, created_at) VALUES (%s, %s, %s)",
+        (question, answer, datetime.utcnow())
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def get_cached_conversation(question: str) -> str:
+    conn = get_db_connection()
+    if not conn:
+        return None
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT answer FROM conversation WHERE question = %s ORDER BY created_at DESC LIMIT 1",
+        (question,)
+    )
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    if row:
+        return row[0]
+    return None
+
+# -------------------------------
 # 기본 엔드포인트
 # -------------------------------
 @app.get("/")
@@ -266,6 +329,9 @@ def root():
     logger.info("GET / 요청 받음.")
     return {"message": "Hello from DTP (GPT Actions)!"}
 
+# -------------------------------
+# DB 테이블 생성 엔드포인트 (dtp_data 및 conversation)
+# -------------------------------
 @app.get("/create-table")
 def create_table():
     logger.info("GET /create-table 요청 받음.")
@@ -280,10 +346,18 @@ def create_table():
             description TEXT
         );
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS conversation (
+            id SERIAL PRIMARY KEY,
+            question TEXT NOT NULL,
+            answer TEXT NOT NULL,
+            created_at TIMESTAMP NOT NULL
+        );
+    """)
     conn.commit()
     cursor.close()
     conn.close()
-    return {"message": "✅ dtp_data 테이블 생성 완료!"}
+    return {"message": "✅ dtp_data 및 conversation 테이블 생성 완료!"}
 
 @app.post("/add-data")
 def add_data(name: str, description: str, user: dict = Depends(optional_verify_token)):
@@ -395,7 +469,7 @@ async def upload_file(file: UploadFile = File(...)):
                 "extracted_dir": extract_dir
             }
         else:
-            # 단일 파일 처리
+            # 단일 파일 처리: 모든 확장자 지원 (txt, pdf, docx, 이미지, 동영상 등)
             content = analyze_file_content(file_path)
             conn = get_db_connection()
             if not conn:
@@ -423,7 +497,7 @@ def download_file(filename: str):
     return FileResponse(file_path, media_type="application/octet-stream", filename=filename)
 
 # -------------------------------
-# RAG 기반 대화 API
+# RAG 기반 대화 API (대화는 무조건 DB를 경유하여 캐싱/저장)
 # -------------------------------
 class ChatRequest(BaseModel):
     query: str
@@ -432,12 +506,24 @@ class ChatRequest(BaseModel):
 @app.post("/chat")
 def chat(request: ChatRequest):
     logger.info("POST /chat 요청 받음.")
+    # 우선 DB에서 캐시된 응답 확인
+    cached_answer = get_cached_conversation(request.query)
+    if cached_answer:
+        logger.info("DB 캐시 응답 반환")
+        return {"response": cached_answer}
+    
+    # 캐시된 응답이 없으면 LLM으로 처리
     vectordb = get_chroma_client()
     retriever = vectordb.as_retriever(search_kwargs={"k": 3})
     llm = ChatOpenAI(temperature=0.7, openai_api_key=OPENAI_API_KEY)
     chain = ConversationalRetrievalChain.from_llm(llm, retriever)
     result = chain({"question": request.query, "chat_history": request.history})
-    return {"response": result["answer"]}
+    answer = result["answer"]
+    
+    # 응답을 DB에 저장
+    save_conversation(request.query, answer)
+    
+    return {"response": answer}
 
 # -------------------------------
 # 노래 가사 생성 API
