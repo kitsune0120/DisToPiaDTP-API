@@ -59,12 +59,10 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 # -------------------------------
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login-for-access-token")
 
-# 사용자 모델 (간단한 예시)
 class User(BaseModel):
     username: str
     password: str
 
-# Fake 사용자 DB (실제 서비스에서는 DB 연동 필요)
 fake_users_db = {
     "johndoe": {
         "username": "johndoe",
@@ -72,7 +70,6 @@ fake_users_db = {
     }
 }
 
-# JWT 토큰 생성 함수
 def create_access_token(data: dict, expires_delta: timedelta = timedelta(hours=1)):
     to_encode = data.copy()
     expire = datetime.utcnow() + expires_delta
@@ -80,7 +77,6 @@ def create_access_token(data: dict, expires_delta: timedelta = timedelta(hours=1
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm="HS256")
     return encoded_jwt
 
-# JWT 검증 (fake 인증 예시)
 def fake_verify_token(token: str = Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
@@ -376,17 +372,42 @@ def backup_db():
         return {"error": f"DB 백업 실패: {e}"}
 
 # -------------------------------
-# GPT Actions용 actions.json 엔드포인트
+# GPT Actions용 actions.json
 # -------------------------------
 @app.get("/actions.json", include_in_schema=False)
 def get_actions_json():
     """
-    GPT Actions가 이 URL을 통해 API 스키마(액션 목록)를 가져갑니다.
-    필요에 따라 더 많은 액션을 추가하세요.
+    GPT Actions가 이 URL을 통해 모든 엔드포인트(액션)를 인식합니다.
+    필요에 따라 각 액션의 parameters를 세부적으로 조정하세요.
     """
     actions_schema = {
         "version": "1.0",
         "actions": [
+            # root
+            {
+                "name": "root",
+                "description": "Basic test route",
+                "endpoint": "/",
+                "method": "GET",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            },
+            # create-table
+            {
+                "name": "createTable",
+                "description": "Create the dtp_data table",
+                "endpoint": "/create-table",
+                "method": "GET",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            },
+            # add-data
             {
                 "name": "addData",
                 "description": "Add data to the DTP world",
@@ -401,6 +422,7 @@ def get_actions_json():
                     "required": ["name", "description"]
                 }
             },
+            # get-data
             {
                 "name": "getData",
                 "description": "Retrieve DTP data list",
@@ -408,9 +430,11 @@ def get_actions_json():
                 "method": "GET",
                 "parameters": {
                     "type": "object",
-                    "properties": {}
+                    "properties": {},
+                    "required": []
                 }
             },
+            # update-data
             {
                 "name": "updateData",
                 "description": "Update data by ID",
@@ -426,6 +450,7 @@ def get_actions_json():
                     "required": ["data_id", "name", "description"]
                 }
             },
+            # delete-data
             {
                 "name": "deleteData",
                 "description": "Delete data by ID",
@@ -438,8 +463,180 @@ def get_actions_json():
                     },
                     "required": ["data_id"]
                 }
+            },
+            # upload
+            {
+                "name": "uploadFile",
+                "description": "Upload a file",
+                "endpoint": "/upload/",
+                "method": "POST",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "file": {"type": "string", "description": "파일(이진 데이터) - multipart/form-data로 전송 필요"}
+                    },
+                    "required": ["file"]
+                }
+            },
+            # download
+            {
+                "name": "downloadFile",
+                "description": "Download a file by filename",
+                "endpoint": "/download/{filename}",
+                "method": "GET",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "filename": {"type": "string", "description": "다운로드할 파일 이름"}
+                    },
+                    "required": ["filename"]
+                }
+            },
+            # chat
+            {
+                "name": "chatRAG",
+                "description": "RAG 기반 대화 API",
+                "endpoint": "/chat",
+                "method": "POST",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "사용자 질문"},
+                        "history": {
+                            "type": "array",
+                            "description": "이전 대화 히스토리",
+                            "items": {"type": "string"}
+                        }
+                    },
+                    "required": ["query"]
+                }
+            },
+            # generate-lyrics
+            {
+                "name": "generateLyrics",
+                "description": "노래 가사 생성 API",
+                "endpoint": "/generate-lyrics/",
+                "method": "POST",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "theme": {"type": "string", "description": "노래 주제"}
+                    },
+                    "required": ["theme"]
+                }
+            },
+            # generate-song
+            {
+                "name": "generateSong",
+                "description": "노래(가사+구조) 생성 API",
+                "endpoint": "/generate-song/",
+                "method": "POST",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "theme": {"type": "string", "description": "노래 주제"}
+                    },
+                    "required": ["theme"]
+                }
+            },
+            # discord-bot
+            {
+                "name": "discordBotCommand",
+                "description": "Discord 봇 명령 테스트",
+                "endpoint": "/discord-bot",
+                "method": "GET",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "command": {"type": "string", "description": "봇 명령어"}
+                    },
+                    "required": ["command"]
+                }
+            },
+            # rp-event
+            {
+                "name": "rpEvent",
+                "description": "RP 이벤트 생성",
+                "endpoint": "/rp-event",
+                "method": "POST",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "event": {"type": "string", "description": "생성할 이벤트 이름"}
+                    },
+                    "required": ["event"]
+                }
+            },
+            # game-status
+            {
+                "name": "gameStatus",
+                "description": "게임 상태 조회",
+                "endpoint": "/game-status",
+                "method": "GET",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            },
+            # growth-feedback
+            {
+                "name": "growthFeedback",
+                "description": "사용자 피드백 저장",
+                "endpoint": "/growth-feedback",
+                "method": "POST",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "user": {"type": "string", "description": "사용자 이름"},
+                        "feedback": {"type": "string", "description": "피드백 내용"}
+                    },
+                    "required": ["user", "feedback"]
+                }
+            },
+            # update-personalization
+            {
+                "name": "updatePersonalization",
+                "description": "사용자 개인화 설정 업데이트",
+                "endpoint": "/update-personalization",
+                "method": "POST",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "user": {"type": "string", "description": "사용자 이름"},
+                        "preferences": {"type": "string", "description": "선호 설정 내용"}
+                    },
+                    "required": ["user", "preferences"]
+                }
+            },
+            # backup-memory
+            {
+                "name": "backupMemory",
+                "description": "대화 내용 백업",
+                "endpoint": "/backup-memory",
+                "method": "POST",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "user_id": {"type": "string", "description": "사용자 ID"},
+                        "query": {"type": "string", "description": "사용자 입력"},
+                        "response": {"type": "string", "description": "GPT 응답"}
+                    },
+                    "required": ["user_id", "query", "response"]
+                }
+            },
+            # backup-db
+            {
+                "name": "backupDB",
+                "description": "DB 백업",
+                "endpoint": "/backup-db",
+                "method": "GET",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
             }
-            # 필요에 따라 upload, download, chat 등도 비슷한 방식으로 추가 가능
         ]
     }
     return actions_schema
