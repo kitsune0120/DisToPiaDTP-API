@@ -4,7 +4,7 @@ import time
 import logging
 import random
 from datetime import datetime, timedelta
-from typing import List  # 추가
+from typing import List
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Depends, Request, Body
 from fastapi.responses import FileResponse
@@ -87,6 +87,18 @@ def fake_verify_token(token: str = Depends(oauth2_scheme)):
         return {"sub": username}
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+# -------------------------------
+# 로그인 엔드포인트 (자동으로 토큰 발급)
+# -------------------------------
+@app.post("/login-for-access-token")
+def login_for_access_token(user: User):
+    # 실제 운영 환경에서는 사용자 인증 로직을 추가해야 합니다.
+    if user.username in fake_users_db and fake_users_db[user.username]["password"] == user.password:
+        token = create_access_token({"sub": user.username})
+        return {"access_token": token, "token_type": "bearer"}
+    else:
+        raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
 
 # -------------------------------
 # 2) PostgreSQL 연결 함수 (디버그 로그 포함)
@@ -239,7 +251,6 @@ async def upload_file(file: UploadFile = File(...)):
     
     return {"filename": os.path.basename(file_path), "message": "파일 업로드 성공!"}
 
-
 # -------------------------------
 # 파일 다운로드 API
 # -------------------------------
@@ -254,7 +265,6 @@ def download_file(filename: str):
 # -------------------------------
 # RAG 기반 대화 API
 # -------------------------------
-# 요청 데이터 스키마 정의 (Pydantic)
 class ChatRequest(BaseModel):
     query: str
     history: List[str] = []
@@ -465,7 +475,11 @@ def get_actions_json():
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "file": {"type": "string", "description": "파일(이진 데이터) - multipart/form-data로 전송 필요"}
+                        "file": {
+                            "type": "string",
+                            "format": "binary",
+                            "description": "파일(이진 데이터) - multipart/form-data로 전송 필요"
+                        }
                     },
                     "required": ["file"]
                 }
