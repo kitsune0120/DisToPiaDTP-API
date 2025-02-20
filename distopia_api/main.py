@@ -4,8 +4,9 @@ import time
 import logging
 import random
 from datetime import datetime, timedelta
+from typing import List  # 추가
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Depends, Request
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Depends, Request, Body
 from fastapi.responses import FileResponse
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
@@ -231,7 +232,6 @@ async def upload_file(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, buffer)
     return {"filename": os.path.basename(file_path), "message": "파일 업로드 성공!"}
 
-
 # -------------------------------
 # 파일 다운로드 API
 # -------------------------------
@@ -246,14 +246,19 @@ def download_file(filename: str):
 # -------------------------------
 # RAG 기반 대화 API
 # -------------------------------
+# 요청 데이터 스키마 정의 (Pydantic)
+class ChatRequest(BaseModel):
+    query: str
+    history: List[str] = []
+
 @app.post("/chat")
-def chat(query: str, history: list = Query(default=[])):
+def chat(request: ChatRequest):
     logger.info("POST /chat 요청 받음.")
     vectordb = get_chroma_client()
     retriever = vectordb.as_retriever(search_kwargs={"k": 3})
     llm = ChatOpenAI(temperature=0.7, openai_api_key=OPENAI_API_KEY)
     chain = ConversationalRetrievalChain.from_llm(llm, retriever)
-    result = chain({"question": query, "chat_history": history})
+    result = chain({"question": request.query, "chat_history": request.history})
     return {"response": result["answer"]}
 
 # -------------------------------
