@@ -5,6 +5,7 @@ import logging
 import random
 import io
 import zipfile
+import re  # 파일명 sanitize를 위해 추가
 from datetime import datetime, timedelta
 from typing import List
 
@@ -42,8 +43,9 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key")  # JWT 발급용 비밀키
 
-print(f"📌 현재 설정된 OPENAI_API_KEY: {OPENAI_API_KEY}")
-print(f"📌 현재 설정된 DATABASE_URL: {DATABASE_URL}")
+# 운영 시 민감 정보 출력은 주석 처리하거나 제거할 것
+# print(f"📌 현재 설정된 OPENAI_API_KEY: {OPENAI_API_KEY}")
+# print(f"📌 현재 설정된 DATABASE_URL: {DATABASE_URL}")
 
 if not OPENAI_API_KEY:
     raise HTTPException(status_code=500, detail="❌ OPENAI_API_KEY가 설정되지 않았습니다.")
@@ -160,6 +162,13 @@ def load_object_detection_model():
         logger.info("✅ 객체 감지 모델 로딩 완료!")
 
 # -------------------------------
+# 파일명 안전 처리 함수 (경로 조작 공격 방지)
+# -------------------------------
+def secure_filename(filename: str) -> str:
+    filename = re.sub(r'[^A-Za-z0-9_.-]', '', filename)
+    return filename
+
+# -------------------------------
 # 파일 형식별 분석 함수들
 # -------------------------------
 def analyze_text_file(file_path: str) -> str:
@@ -204,8 +213,12 @@ def analyze_image(file_path: str) -> str:
             # 객체 감지 (간단 예시)
             inputs = object_processor(images=img, return_tensors="pt")
             outputs = object_detector(**inputs)
-            # (실제로는 후처리 및 NMS 적용 필요)
-            detected = "객체: " + ", ".join([f"{obj['label']}" for obj in outputs.logits.argmax(dim=-1).tolist()[0:3]])
+            # 수정된 부분: id2label 매핑을 통해 정수 인덱스를 레이블로 변환
+            pred_logits = outputs.logits  # (batch_size, num_queries, num_classes)
+            pred_classes = pred_logits.argmax(dim=-1)  # (batch_size, num_queries)
+            top_indices = pred_classes[0][:3].tolist()  # 첫 번째 배치의 상위 3개 결과
+            labels = [object_detector.config.id2label.get(idx, str(idx)) for idx in top_indices]
+            detected = "객체: " + ", ".join(labels)
             result += f"[객체 감지] {detected}"
     except Exception as e:
         result += f"[오류] 이미지 분석 실패: {e}"
@@ -347,10 +360,11 @@ def delete_data(data_id: int, user: dict = Depends(optional_verify_token)):
 async def upload_file(file: UploadFile = File(...)):
     logger.info("POST /upload/ 요청 받음.")
     try:
-        # 저장 경로 결정 (동일 이름이면 시간 추가)
-        file_path = os.path.join(UPLOAD_DIR, file.filename)
+        # 파일명 안전 처리: 클라이언트가 전달한 파일명을 sanitize 함
+        safe_filename = secure_filename(file.filename)
+        file_path = os.path.join(UPLOAD_DIR, safe_filename)
         if os.path.exists(file_path):
-            base, ext = os.path.splitext(file.filename)
+            base, ext = os.path.splitext(safe_filename)
             file_path = os.path.join(UPLOAD_DIR, f"{base}_{int(time.time())}{ext}")
         
         # 파일 저장
