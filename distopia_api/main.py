@@ -36,7 +36,7 @@ from langchain_community.vectorstores import Chroma
 from langchain.chains import ConversationalRetrievalChain
 
 # -------------------------------
-# 1) .env 파일 로드 & 환경 변수 설정
+# 1) .env 파일 로드 및 환경 변수 설정
 # -------------------------------
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -122,7 +122,7 @@ def get_db_connection():
         return None
 
 # -------------------------------
-# DB 테이블 생성 (dtp_data와 conversation)
+# DB 테이블 생성 (dtp_data 및 conversation)
 # -------------------------------
 @app.get("/create-table")
 def create_table():
@@ -131,7 +131,6 @@ def create_table():
     if not conn:
         raise HTTPException(status_code=500, detail="DB 연결 실패")
     cursor = conn.cursor()
-    # dtp_data 테이블 생성
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS dtp_data (
             id SERIAL PRIMARY KEY,
@@ -139,7 +138,6 @@ def create_table():
             description TEXT
         );
     """)
-    # conversation 테이블 생성
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS conversation (
             id SERIAL PRIMARY KEY,
@@ -469,7 +467,7 @@ async def upload_file(file: UploadFile = File(...)):
                 "extracted_dir": extract_dir
             }
         else:
-            # 단일 파일 처리: 모든 확장자 지원 (txt, pdf, docx, 이미지, 동영상 등)
+            # 단일 파일 처리: 지원하는 모든 확장자 (txt, pdf, docx, 이미지, 동영상 등)
             content = analyze_file_content(file_path)
             conn = get_db_connection()
             if not conn:
@@ -506,13 +504,13 @@ class ChatRequest(BaseModel):
 @app.post("/chat")
 def chat(request: ChatRequest):
     logger.info("POST /chat 요청 받음.")
-    # 우선 DB에서 캐시된 응답 확인
+    # DB에서 캐시된 응답 확인
     cached_answer = get_cached_conversation(request.query)
     if cached_answer:
         logger.info("DB 캐시 응답 반환")
         return {"response": cached_answer}
     
-    # 캐시된 응답이 없으면 LLM으로 처리
+    # 캐시된 응답이 없으면 LLM 처리
     vectordb = get_chroma_client()
     retriever = vectordb.as_retriever(search_kwargs={"k": 3})
     llm = ChatOpenAI(temperature=0.7, openai_api_key=OPENAI_API_KEY)
@@ -537,7 +535,7 @@ def generate_lyrics(theme: str):
     return {"lyrics": lyrics}
 
 # -------------------------------
-# 노래 생성 API (가사+구조)
+# 노래 생성 API (가사 + 구조)
 # -------------------------------
 @app.post("/generate-song/")
 def generate_song(theme: str):
