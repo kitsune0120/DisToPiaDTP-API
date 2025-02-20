@@ -359,4 +359,7 @@ def openapi_schema():
 # 앱 실행
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    import os
+
+    port = int(os.getenv("PORT", 8000))  # Render가 주는 PORT 사용, 없으면 8000
+    uvicorn.run(app, host="0.0.0.0", port=port)
