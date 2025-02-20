@@ -339,13 +339,13 @@ def ai_plugin_manifest():
         "description_for_model": "Use this plugin to fetch actions from the Dystopia API.",
         "auth": {"type": "none"},
         "api": {
-            "type": "openapi",
-            "url": "http://127.0.0.1:8000/openapi.json",
-            "is_user_authenticated": False
-        },
-        "logo_url": "http://127.0.0.1:8000/logo.png",
-        "contact_email": "support@yourdomain.com",
-        "legal_info_url": "http://127.0.0.1:8000/legal"
+  "type": "openapi",
+  "url": "https://distopiadtp-api.onrender.com/openapi.json",
+  "is_user_authenticated": false
+},
+"logo_url": "https://distopiadtp-api.onrender.com/logo.png",
+"contact_email": "support@yourdomain.com",
+"legal_info_url": "https://distopiadtp-api.onrender.com/legal"
     }
 
 # -------------------------------
