@@ -12,4 +12,5 @@ tiktoken
 pyjwt
 ffmpeg-python
 PyPDF2
-docx
+python-docx
+
