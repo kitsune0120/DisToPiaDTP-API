@@ -52,16 +52,35 @@ if not DATABASE_URL:
 # 로깅 설정
 # -------------------------------
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 # -------------------------------
-# FastAPI 앱 생성
+# FastAPI 앱 생성 및 Custom OpenAPI (servers 설정)
 # -------------------------------
+from fastapi.openapi.utils import get_openapi
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title="DisToPia API (Local)",
+        version="4.0",
+        description="DTP 세계관 API (로컬 DB + AI + 파일 관리)",
+        routes=app.routes,
+    )
+    # OpenAPI 버전을 3.1.0으로 강제
+    openapi_schema["openapi"] = "3.1.0"
+    # 개발/로컬 테스트 중이면 servers 항목을 빈 리스트로 설정
+    openapi_schema["servers"] = []
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
 app = FastAPI(
     title="DisToPia API (Local)",
     description="DTP 세계관 API (로컬 DB + AI + 파일 관리)",
     version="4.0"
 )
+app.openapi = custom_openapi
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -126,6 +145,7 @@ def get_db_connection():
 # -------------------------------
 @app.get("/create-table")
 def create_table():
+    logger.info("GET /create-table 요청 받음.")
     conn = get_db_connection()
     if not conn:
         raise HTTPException(status_code=500, detail="DB 연결 실패")
@@ -189,7 +209,7 @@ def analyze_file_content(file_path: str) -> str:
             text = "\n".join([para.text for para in doc.paragraphs])
             return text if text else "DOCX에서 텍스트 추출 실패"
         elif ext in [".png", ".jpg", ".jpeg"]:
-            # 이미지 캡션 모델 로딩 (필요 시)
+            # 이미지 캡션 모델 로딩 (필요 시 구현)
             return "이미지 파일 처리 (캡션 생성 등) - 필요 시 구현"
         else:
             return f"지원하지 않는 파일 형식({ext})"
