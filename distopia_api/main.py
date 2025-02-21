@@ -118,7 +118,7 @@ def get_db_connection():
         logger.info("✅ 데이터베이스에 성공적으로 연결되었습니다!")
         return conn
     except Exception as e:
-        logger.error(f"❌ 데이터베이스 연결 실패: {e}")
+        logger.error(f"❌ 데이터베이스 연결 실패: {e}", exc_info=True)
         return None
 
 # -------------------------------
@@ -232,7 +232,7 @@ def save_conversation(question: str, answer: str):
         conn.close()
 
 # -------------------------------
-# 루트
+# 루트 엔드포인트
 # -------------------------------
 @app.get("/")
 def root():
@@ -315,10 +315,6 @@ class ChatRequest(BaseModel):
 
 @app.post("/chat")
 def chat(request: ChatRequest):
-    # 예시 GPT 연동
-    # vectordb = get_chroma_client()  # 필요 시 사용
-    # ...
-    # 여기서는 간단히 DB 캐시만 예시
     cached_answer = get_cached_conversation(request.query)
     if cached_answer:
         return {"response": cached_answer}
