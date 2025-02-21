@@ -50,6 +50,22 @@ with tabs[0]:
     else:
         st.warning("로그인되지 않았습니다.")
 
+# --- 탭 2: 파일 관리 (삭제 기능 포함) ---
+with tabs[1]:
+    st.header("파일 관리")
+    st.subheader("파일 삭제")
+    del_filename = st.text_input("삭제할 파일명 (예: 1.zip)", key="del_filename")
+    if st.button("파일 삭제"):
+         try:
+             url = join_url(API_URL, "delete-file", del_filename)
+             response = requests.delete(url, headers=get_auth_headers())
+             if response.status_code == 200:
+                 st.success(response.json().get("message", "파일 삭제 성공"))
+             else:
+                 st.error("파일 삭제 실패: " + response.json().get("detail", "오류 발생"))
+         except Exception as e:
+             st.error(f"파일 삭제 중 예외 발생: {e}")
+             
 # 탭 2: DB 관리
 with tabs[1]:
     st.header("DB 관리")
@@ -178,6 +194,8 @@ with tabs[4]:
                 st.error(f"노래 생성 중 예외 발생: {e}")
         else:
             st.warning("테마를 입력하세요.")
+
+
 
 # 탭 6: 기타 기능
 with tabs[5]:
