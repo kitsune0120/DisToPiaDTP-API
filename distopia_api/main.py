@@ -495,6 +495,19 @@ def game_status():
     status = {"players": random.randint(1, 100), "score": random.randint(0, 1000), "status": "running"}
     return {"game_status": status}
 
+@app.delete("/delete-file/{filename}", operation_id="deleteFile")
+def delete_file(filename: str):
+    # 파일명 안전 처리를 위해 secure_filename 사용
+    safe_filename = secure_filename(filename)
+    # UPLOAD_DIR은 기존에 "uploads"로 설정되어 있음 (Render 배포 시 /opt/render/project/src/uploads)
+    file_path = os.path.join(UPLOAD_DIR, safe_filename)
+    
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        return {"message": f"{filename} 파일 삭제 완료!"}
+    else:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
+
 # -------------------------------
 # 커스텀 OpenAPI 함수 (OpenAPI 버전 3.1.0, servers 설정)
 # -------------------------------
