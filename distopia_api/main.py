@@ -55,18 +55,12 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger()
 
 # -------------------------------
-# FastAPI 앱 생성 (Swagger에서 502 방지용 servers 설정 추가)
+# FastAPI 앱 생성 (operationId & openapi=3.1.0 설정을 위해 커스텀 openapi 사용)
 # -------------------------------
 app = FastAPI(
     title="DisToPia API (GPT Actions)",
     description="DTP 세계관 API (DB + AI + RAG + 파일 관리 + GPT Actions)",
-    version="4.0",
-    servers=[
-        {
-            "url": "https://distopiadtp-api.onrender.com",  # 실제 배포 주소로 바꿔 주세요
-            "description": "Render Deployment"
-        }
-    ]
+    version="4.0"
 )
 
 UPLOAD_DIR = "uploads"
@@ -107,7 +101,7 @@ async def optional_verify_token(authorization: str = Header(None)):
     else:
         return {"sub": "anonymous"}
 
-@app.post("/login-for-access-token")
+@app.post("/login-for-access-token", operation_id="loginForAccessToken")
 def login_for_access_token(user: User):
     if user.username in fake_users_db and fake_users_db[user.username]["password"] == user.password:
         token = create_access_token({"sub": user.username})
@@ -130,7 +124,7 @@ def get_db_connection():
 # -------------------------------
 # DB 테이블 생성 (dtp_data 및 conversation)
 # -------------------------------
-@app.get("/create-table")
+@app.get("/create-table", operation_id="createTable")
 def create_table():
     logger.info("GET /create-table 요청 받음.")
     conn = get_db_connection()
@@ -200,170 +194,17 @@ def secure_filename(filename: str) -> str:
     return filename
 
 # -------------------------------
-# 파일 형식별 분석 함수들
+# 기본 엔드포인트 (루트)
 # -------------------------------
-def analyze_text_file(file_path: str) -> str:
-    try:
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-            return f.read()
-    except Exception as e:
-        return f"[오류] 텍스트 파일 읽기 실패: {e}"
-
-def analyze_pdf(file_path: str) -> str:
-    try:
-        text = ""
-        with open(file_path, "rb") as f:
-            reader = PyPDF2.PdfReader(f)
-            for page in reader.pages:
-                text += page.extract_text() + "\n"
-        return text
-    except Exception as e:
-        return f"[오류] PDF 파싱 실패: {e}"
-
-def analyze_docx(file_path: str) -> str:
-    try:
-        doc = docx.Document(file_path)
-        text = "\n".join([para.text for para in doc.paragraphs])
-        return text
-    except Exception as e:
-        return f"[오류] DOCX 파싱 실패: {e}"
-
-def analyze_image(file_path: str) -> str:
-    result = ""
-    try:
-        load_image_caption_model()
-        load_object_detection_model()
-        with Image.open(file_path) as img:
-            if img.mode != "RGB":
-                img = img.convert("RGB")
-            # 이미지 캡션 생성
-            pixel_values = image_processor(img, return_tensors="pt").pixel_values
-            output_ids = image_caption_model.generate(pixel_values, max_length=50, num_beams=4)
-            caption = caption_tokenizer.decode(output_ids[0], skip_special_tokens=True)
-            result += f"[캡션] {caption}\n"
-            # 객체 감지 (간단 예시)
-            inputs = object_processor(images=img, return_tensors="pt")
-            outputs = object_detector(**inputs)
-            pred_logits = outputs.logits
-            pred_classes = pred_logits.argmax(dim=-1)
-            top_indices = pred_classes[0][:3].tolist()  # 상위 3개 결과
-            labels = [object_detector.config.id2label.get(idx, str(idx)) for idx in top_indices]
-            detected = "객체: " + ", ".join(labels)
-            result += f"[객체 감지] {detected}"
-    except Exception as e:
-        result += f"[오류] 이미지 분석 실패: {e}"
-    return result
-
-def analyze_video(file_path: str) -> str:
-    captions = []
-    try:
-        probe = ffmpeg.probe(file_path)
-        duration = float(probe['format']['duration'])
-        num_frames = int(duration // 10)
-        for i in range(num_frames):
-            out_file = f"{file_path}_frame_{i}.jpg"
-            (
-                ffmpeg
-                .input(file_path, ss=i*10)
-                .output(out_file, vframes=1)
-                .overwrite_output()
-                .run(quiet=True)
-            )
-            cap = analyze_image(out_file)
-            captions.append(cap)
-            os.remove(out_file)
-        summary = " | ".join(captions)
-        return f"[동영상 요약] {summary}"
-    except Exception as e:
-        return f"[오류] 동영상 분석 실패: {e}"
-
-def analyze_file_content(file_path: str) -> str:
-    ext = os.path.splitext(file_path)[1].lower()
-    if ext in [".txt", ".html", ".csv", ".json", ".md", ".log", ".xml"]:
-        return analyze_text_file(file_path)
-    elif ext == ".pdf":
-        return analyze_pdf(file_path)
-    elif ext == ".docx":
-        return analyze_docx(file_path)
-    elif ext in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"]:
-        return analyze_image(file_path)
-    elif ext in [".mp4", ".mov", ".avi", ".mkv", ".wmv"]:
-        return analyze_video(file_path)
-    else:
-        return f"[미지원] {ext} 확장자는 현재 지원되지 않습니다."
-
-# -------------------------------
-# 대화 내용을 DB에 저장하는 함수
-# -------------------------------
-def save_conversation(question: str, answer: str):
-    conn = get_db_connection()
-    if not conn:
-        logger.error("DB 연결 실패, 대화 저장 안됨")
-        return
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO conversation (question, answer, created_at) VALUES (%s, %s, %s)",
-        (question, answer, datetime.utcnow())
-    )
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-def get_cached_conversation(question: str) -> str:
-    conn = get_db_connection()
-    if not conn:
-        return None
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT answer FROM conversation WHERE question = %s ORDER BY created_at DESC LIMIT 1",
-        (question,)
-    )
-    row = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    if row:
-        return row[0]
-    return None
-
-# -------------------------------
-# 기본 엔드포인트
-# -------------------------------
-@app.get("/")
+@app.get("/", operation_id="rootGet")
 def root():
     logger.info("GET / 요청 받음.")
     return {"message": "Hello from DTP (GPT Actions)!"}
 
 # -------------------------------
-# DB 테이블 생성 엔드포인트 (dtp_data 및 conversation)
+# DB API
 # -------------------------------
-@app.get("/create-table")
-def create_table():
-    logger.info("GET /create-table 요청 받음.")
-    conn = get_db_connection()
-    if not conn:
-        raise HTTPException(status_code=500, detail="DB 연결 실패")
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS dtp_data (
-            id SERIAL PRIMARY KEY,
-            name TEXT NOT NULL,
-            description TEXT
-        );
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS conversation (
-            id SERIAL PRIMARY KEY,
-            question TEXT NOT NULL,
-            answer TEXT NOT NULL,
-            created_at TIMESTAMP NOT NULL
-        );
-    """)
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return {"message": "✅ dtp_data 및 conversation 테이블 생성 완료!"}
-
-@app.post("/add-data")
+@app.post("/add-data", operation_id="addDataPost")
 def add_data(name: str, description: str, user: dict = Depends(optional_verify_token)):
     logger.info(f"POST /add-data 요청 받음. 사용자: {user['sub']}")
     conn = get_db_connection()
@@ -384,7 +225,7 @@ def add_data(name: str, description: str, user: dict = Depends(optional_verify_t
     conn.close()
     return {"message": message}
 
-@app.get("/get-data")
+@app.get("/get-data", operation_id="getDataGet")
 def get_data():
     logger.info("GET /get-data 요청 받음.")
     conn = get_db_connection()
@@ -397,7 +238,7 @@ def get_data():
     conn.close()
     return {"data": rows}
 
-@app.put("/update-data/{data_id}")
+@app.put("/update-data/{data_id}", operation_id="updateDataPut")
 def update_data(data_id: int, name: str, description: str, user: dict = Depends(optional_verify_token)):
     logger.info(f"PUT /update-data/{data_id} 요청 받음. 사용자: {user['sub']}")
     conn = get_db_connection()
@@ -410,7 +251,7 @@ def update_data(data_id: int, name: str, description: str, user: dict = Depends(
     conn.close()
     return {"message": f"✅ 데이터 업데이트 완료! (id={data_id})"}
 
-@app.delete("/delete-data/{data_id}")
+@app.delete("/delete-data/{data_id}", operation_id="deleteDataDelete")
 def delete_data(data_id: int, user: dict = Depends(optional_verify_token)):
     logger.info(f"DELETE /delete-data/{data_id} 요청 받음. 사용자: {user['sub']}")
     conn = get_db_connection()
@@ -424,9 +265,9 @@ def delete_data(data_id: int, user: dict = Depends(optional_verify_token)):
     return {"message": f"✅ 데이터 삭제 완료! (id={data_id})"}
 
 # -------------------------------
-# 파일 업로드 및 분석 API (최고의 확장 기능)
+# 파일 업로드 및 분석 API
 # -------------------------------
-@app.post("/upload/")
+@app.post("/upload/", operation_id="uploadFilePost")
 async def upload_file(file: UploadFile = File(...)):
     logger.info("POST /upload/ 요청 받음.")
     try:
@@ -473,7 +314,7 @@ async def upload_file(file: UploadFile = File(...)):
                 "extracted_dir": extract_dir
             }
         else:
-            # 단일 파일 처리: 지원하는 모든 확장자 (txt, pdf, docx, 이미지, 동영상 등)
+            # 단일 파일 처리
             content = analyze_file_content(file_path)
             conn = get_db_connection()
             if not conn:
@@ -492,7 +333,7 @@ async def upload_file(file: UploadFile = File(...)):
     
     return {"filename": os.path.basename(file_path), "message": "파일 업로드 및 분석/DB 저장 성공!"}
 
-@app.get("/download/{filename}")
+@app.get("/download/{filename}", operation_id="downloadFileGet")
 def download_file(filename: str):
     logger.info(f"GET /download/{filename} 요청 받음.")
     file_path = os.path.join(UPLOAD_DIR, filename)
@@ -501,22 +342,20 @@ def download_file(filename: str):
     return FileResponse(file_path, media_type="application/octet-stream", filename=filename)
 
 # -------------------------------
-# RAG 기반 대화 API (대화는 무조건 DB를 경유하여 캐싱/저장)
+# RAG 기반 대화 API
 # -------------------------------
 class ChatRequest(BaseModel):
     query: str
     history: List[str] = []
 
-@app.post("/chat")
+@app.post("/chat", operation_id="chatPost")
 def chat(request: ChatRequest):
     logger.info("POST /chat 요청 받음.")
-    # DB에서 캐시된 응답 확인
     cached_answer = get_cached_conversation(request.query)
     if cached_answer:
         logger.info("DB 캐시 응답 반환")
         return {"response": cached_answer}
     
-    # 캐시된 응답이 없으면 LLM 처리
     vectordb = get_chroma_client()
     retriever = vectordb.as_retriever(search_kwargs={"k": 3})
     llm = ChatOpenAI(temperature=0.7, openai_api_key=OPENAI_API_KEY)
@@ -532,7 +371,7 @@ def chat(request: ChatRequest):
 # -------------------------------
 # 노래 가사 생성 API
 # -------------------------------
-@app.post("/generate-lyrics/")
+@app.post("/generate-lyrics/", operation_id="generateLyricsPost")
 def generate_lyrics(theme: str):
     logger.info(f"POST /generate-lyrics 요청 받음. Theme: {theme}")
     lyrics = f"이 노래는 '{theme}'에 관한 이야기입니다.\n"
@@ -543,7 +382,7 @@ def generate_lyrics(theme: str):
 # -------------------------------
 # 노래 생성 API (가사 + 구조)
 # -------------------------------
-@app.post("/generate-song/")
+@app.post("/generate-song/", operation_id="generateSongPost")
 def generate_song(theme: str):
     logger.info(f"POST /generate-song 요청 받음. Theme: {theme}")
     lyrics = generate_lyrics(theme)['lyrics']
@@ -560,7 +399,7 @@ def generate_song(theme: str):
 # -------------------------------
 # Discord 봇 통합 (플레이스홀더)
 # -------------------------------
-@app.get("/discord-bot")
+@app.get("/discord-bot", operation_id="discordBotGet")
 def discord_bot_command(command: str):
     logger.info(f"GET /discord-bot 요청 받음. Command: {command}")
     return {"message": f"Discord 봇이 '{command}' 명령을 처리했습니다."}
@@ -568,7 +407,7 @@ def discord_bot_command(command: str):
 # -------------------------------
 # RP 이벤트 생성 (플레이스홀더)
 # -------------------------------
-@app.post("/rp-event")
+@app.post("/rp-event", operation_id="rpEventPost")
 def rp_event(event: str):
     logger.info(f"POST /rp-event 요청 받음. Event: {event}")
     return {"message": f"RP 이벤트 '{event}'가 생성되었습니다."}
@@ -576,11 +415,39 @@ def rp_event(event: str):
 # -------------------------------
 # 게임 상태 조회 (플레이스홀더)
 # -------------------------------
-@app.get("/game-status")
+@app.get("/game-status", operation_id="gameStatusGet")
 def game_status():
     logger.info("GET /game-status 요청 받음.")
     status = {"players": random.randint(1, 100), "score": random.randint(0, 1000), "status": "running"}
     return {"game_status": status}
+
+
+# -------------------------------
+# 커스텀 OpenAPI 함수 (OpenAPI 버전 3.1.0, servers 설정)
+# -------------------------------
+from fastapi.openapi.utils import get_openapi
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title="DisToPia API (GPT Actions)",
+        version="4.0",
+        description="DTP 세계관 API (DB + AI + RAG + 파일 관리 + GPT Actions)",
+        routes=app.routes,
+    )
+    # OpenAPI 버전을 3.1.0으로 강제
+    openapi_schema["openapi"] = "3.1.0"
+    # Servers 설정 (실제 배포 주소에 맞춰 수정)
+    openapi_schema["servers"] = [
+        {"url": "https://distopiadtp-api.onrender.com/", "description": "production server"}
+    ]
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+# FastAPI가 위 custom_openapi를 사용하도록 설정
+app.openapi = custom_openapi
+
 
 if __name__ == "__main__":
     import uvicorn
