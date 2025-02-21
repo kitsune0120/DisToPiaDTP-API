@@ -416,6 +416,19 @@ def download_file(filename: str):
     return FileResponse(file_path, media_type="application/octet-stream", filename=filename)
 
 # -------------------------------
+# 파일 삭제 API
+# -------------------------------
+@app.delete("/delete-file/{filename}", operation_id="deleteFile")
+def delete_file(filename: str):
+    safe_filename = secure_filename(filename)
+    file_path = os.path.join(UPLOAD_DIR, safe_filename)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        return {"message": f"{filename} 파일 삭제 완료!"}
+    else:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
+
+# -------------------------------
 # RAG 기반 대화 API
 # -------------------------------
 class ChatRequest(BaseModel):
@@ -495,19 +508,6 @@ def game_status():
     status = {"players": random.randint(1, 100), "score": random.randint(0, 1000), "status": "running"}
     return {"game_status": status}
 
-@app.delete("/delete-file/{filename}", operation_id="deleteFile")
-def delete_file(filename: str):
-    # 파일명 안전 처리를 위해 secure_filename 사용
-    safe_filename = secure_filename(filename)
-    # UPLOAD_DIR은 기존에 "uploads"로 설정되어 있음 (Render 배포 시 /opt/render/project/src/uploads)
-    file_path = os.path.join(UPLOAD_DIR, safe_filename)
-    
-    if os.path.exists(file_path):
-        os.remove(file_path)
-        return {"message": f"{filename} 파일 삭제 완료!"}
-    else:
-        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
-
 # -------------------------------
 # 커스텀 OpenAPI 함수 (OpenAPI 버전 3.1.0, servers 설정)
 # -------------------------------
@@ -524,7 +524,7 @@ def custom_openapi():
     )
     # OpenAPI 버전을 3.1.0으로 강제
     openapi_schema["openapi"] = "3.1.0"
-    # Servers 설정: 끝의 슬래시 없이 URL 지정
+    # servers 항목: 끝의 슬래시 없이 URL 지정
     openapi_schema["servers"] = [
         {"url": "https://distopiadtp-api.onrender.com", "description": "production server"}
     ]
@@ -537,3 +537,25 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
+
+# ================================
+# 파일 삭제 액션 스키마 (deleteFile) - 참고용 JSON
+# ================================
+# {
+#   "schema_version": "1.0",
+#   "actions": [
+#     {
+#       "name": "deleteFile",
+#       "description": "Uploads 폴더에 저장된 파일을 삭제합니다.",
+#       "endpoint": "/delete-file/{filename}",
+#       "method": "DELETE",
+#       "parameters": {
+#         "filename": {
+#           "type": "string",
+#           "description": "삭제할 파일의 이름 (예: 1.zip)"
+#         }
+#       }
+#     }
+#   ]
+# }
