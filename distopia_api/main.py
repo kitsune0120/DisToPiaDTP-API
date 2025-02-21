@@ -73,10 +73,14 @@ def custom_openapi():
         routes=app.routes,
     )
     openapi_schema["openapi"] = "3.1.0"
-    # 개발/로컬 테스트 중에는 servers 항목을 빈 리스트로 설정
-    openapi_schema["servers"] = []
+    # 서버 주소를 http://127.0.0.1:8000 으로 설정 (FastAPI docs 기준)
+    openapi_schema["servers"] = [
+        {"url": "http://127.0.0.1:8000", "description": "Local development server"}
+    ]
     app.openapi_schema = openapi_schema
     return app.openapi_schema
+
+app.openapi = custom_openapi
 
 # -------------------------------
 # FastAPI 앱 생성
