@@ -55,7 +55,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger()
 
 # -------------------------------
-# FastAPI 앱 생성 (operationId & openapi=3.1.0 설정을 위해 커스텀 openapi 사용)
+# FastAPI 앱 생성 (커스텀 OpenAPI 사용)
 # -------------------------------
 app = FastAPI(
     title="DisToPia API (GPT Actions)",
@@ -511,14 +511,13 @@ def custom_openapi():
     )
     # OpenAPI 버전을 3.1.0으로 강제
     openapi_schema["openapi"] = "3.1.0"
-    # Servers 설정 (실제 배포 주소에 맞춰 수정)
+    # Servers 설정: 끝의 슬래시 없이 URL 지정
     openapi_schema["servers"] = [
-        {"url": "https://distopiadtp-api.onrender.com/", "description": "production server"}
+        {"url": "https://distopiadtp-api.onrender.com", "description": "production server"}
     ]
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
-# FastAPI가 위 custom_openapi를 사용하도록 설정
 app.openapi = custom_openapi
 
 if __name__ == "__main__":
