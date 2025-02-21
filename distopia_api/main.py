@@ -194,6 +194,80 @@ def secure_filename(filename: str) -> str:
     return filename
 
 # -------------------------------
+# 미정의 함수 구현: 파일 내용 분석
+# -------------------------------
+def analyze_file_content(file_path: str) -> str:
+    ext = os.path.splitext(file_path)[1].lower()
+    try:
+        if ext == ".txt":
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                return f.read()
+        elif ext == ".pdf":
+            with open(file_path, "rb") as f:
+                reader = PyPDF2.PdfReader(f)
+                text = ""
+                for page in reader.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text += page_text
+                return text if text else "PDF 파일에서 텍스트를 추출하지 못했습니다."
+        elif ext == ".docx":
+            doc = docx.Document(file_path)
+            text = "\n".join([para.text for para in doc.paragraphs])
+            return text if text else "DOCX 파일에서 텍스트를 추출하지 못했습니다."
+        elif ext in [".png", ".jpg", ".jpeg"]:
+            load_image_caption_model()  # 모델 로딩
+            image = Image.open(file_path)
+            pixel_values = image_processor(image, return_tensors="pt").pixel_values
+            output_ids = image_caption_model.generate(pixel_values, max_length=16, num_beams=4)
+            caption = caption_tokenizer.decode(output_ids[0], skip_special_tokens=True)
+            return f"이미지 캡션: {caption}"
+        else:
+            return f"지원하지 않는 파일 형식({ext})입니다."
+    except Exception as e:
+        logger.error("파일 분석 중 오류 발생: %s", e)
+        return f"파일 분석 중 오류 발생: {e}"
+
+# -------------------------------
+# 미정의 함수 구현: 대화 캐시 조회 및 저장 (DB 기반)
+# -------------------------------
+def get_cached_conversation(question: str) -> str:
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT answer FROM conversation WHERE question = %s ORDER BY created_at DESC LIMIT 1", (question,))
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if result:
+            return result[0]
+        return None
+    except Exception as e:
+        logger.error("get_cached_conversation 오류: %s", e)
+        return None
+
+def save_conversation(question: str, answer: str):
+    conn = get_db_connection()
+    if not conn:
+        logger.error("DB 연결 실패, 대화 저장 안됨.")
+        return
+    try:
+        cursor = conn.cursor()
+        created_at = datetime.utcnow()
+        cursor.execute("INSERT INTO conversation (question, answer, created_at) VALUES (%s, %s, %s)", (question, answer, created_at))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        logger.info("대화 저장 완료.")
+    except Exception as e:
+        logger.error("save_conversation 오류: %s", e)
+        conn.rollback()
+        cursor.close()
+        conn.close()
+
+# -------------------------------
 # 기본 엔드포인트 (루트)
 # -------------------------------
 @app.get("/", operation_id="rootGet")
@@ -421,7 +495,6 @@ def game_status():
     status = {"players": random.randint(1, 100), "score": random.randint(0, 1000), "status": "running"}
     return {"game_status": status}
 
-
 # -------------------------------
 # 커스텀 OpenAPI 함수 (OpenAPI 버전 3.1.0, servers 설정)
 # -------------------------------
@@ -447,7 +520,6 @@ def custom_openapi():
 
 # FastAPI가 위 custom_openapi를 사용하도록 설정
 app.openapi = custom_openapi
-
 
 if __name__ == "__main__":
     import uvicorn
