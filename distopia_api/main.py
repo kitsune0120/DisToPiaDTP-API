@@ -55,12 +55,18 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger()
 
 # -------------------------------
-# FastAPI 앱 생성
+# FastAPI 앱 생성 (Swagger에서 502 방지용 servers 설정 추가)
 # -------------------------------
 app = FastAPI(
     title="DisToPia API (GPT Actions)",
     description="DTP 세계관 API (DB + AI + RAG + 파일 관리 + GPT Actions)",
-    version="4.0"
+    version="4.0",
+    servers=[
+        {
+            "url": "https://distopiadtp-api.onrender.com",  # 실제 배포 주소로 바꿔 주세요
+            "description": "Render Deployment"
+        }
+    ]
 )
 
 UPLOAD_DIR = "uploads"
