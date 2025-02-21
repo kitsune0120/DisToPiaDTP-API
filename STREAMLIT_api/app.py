@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 
-# 로컬에서 FastAPI 백엔드를 실행할 때의 기본 URL
+# FastAPI 백엔드의 기본 URL (로컬 테스트 시)
 API_URL = "http://127.0.0.1:8000"
 
 def join_url(*parts):
@@ -19,8 +19,10 @@ def get_auth_headers():
         return {"Authorization": f"Bearer {st.session_state['token']}"}
     return {}
 
-# 탭 구성: 로그인, 파일 관리, 대화 등 (원하는 기능 추가 가능)
-tabs = st.tabs(["로그인", "파일 관리", "대화"])
+# ─────────────────────────────────────────────
+# 탭 구성: 로그인, 파일 관리, 대화, DB 관리
+# ─────────────────────────────────────────────
+tabs = st.tabs(["로그인", "파일 관리", "대화", "DB 관리"])
 
 # --- 탭 1: 로그인 ---
 with tabs[0]:
@@ -48,8 +50,13 @@ with tabs[0]:
 # --- 탭 2: 파일 관리 ---
 with tabs[1]:
     st.header("파일 관리")
+    
     st.subheader("파일 업로드")
-    uploaded_file = st.file_uploader("파일 선택 (ZIP, 이미지, 텍스트 등)", type=["zip", "png", "jpg", "jpeg", "pdf", "docx", "txt"], key="file_upload")
+    uploaded_file = st.file_uploader(
+        "파일 선택 (ZIP, 이미지, 텍스트 등)",
+        type=["zip", "png", "jpg", "jpeg", "pdf", "docx", "txt"],
+        key="file_upload"
+    )
     if uploaded_file and st.button("파일 업로드"):
         try:
             url = join_url(API_URL, "upload")
@@ -108,3 +115,19 @@ with tabs[2]:
                 st.error(f"대화 중 예외 발생: {e}")
         else:
             st.warning("질문을 입력하세요.")
+
+# --- 탭 4: DB 관리 ---
+with tabs[3]:
+    st.header("DB 관리")
+    st.subheader("테이블 생성")
+    st.write("FastAPI 서버의 `/create-table` 엔드포인트를 호출해 테이블을 생성합니다.")
+    if st.button("테이블 생성 요청"):
+        try:
+            url = join_url(API_URL, "create-table")
+            response = requests.get(url, headers=get_auth_headers())
+            if response.status_code == 200:
+                st.success(response.json().get("message", "테이블 생성 완료"))
+            else:
+                st.error(response.json().get("detail", "오류 발생"))
+        except Exception as e:
+            st.error(f"테이블 생성 중 예외 발생: {e}")
