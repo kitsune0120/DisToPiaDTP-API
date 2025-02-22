@@ -66,7 +66,7 @@
             const formData = new FormData();
             formData.append('file', file);
 
-            axios.post('https://127.0.0.1:8001/upload/', formData, {
+            axios.post('https://127.0.0.1:8001/upload-zip/', formData, {  // 엔드포인트 수정
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 }
@@ -82,7 +82,7 @@
         // 다운로드 버튼 클릭 시
         document.getElementById('downloadBtn').addEventListener('click', function() {
             const fileName = document.getElementById('fileName').value;
-            axios.get(`https://127.0.0.1:8001/download/${fileName}`, {
+            axios.get(`https://127.0.0.1:8001/download/${fileName}`, {  // 엔드포인트 수정
                 responseType: 'blob',
             })
             .then(response => {
@@ -99,13 +99,13 @@
         // 데이터베이스에서 데이터 검색
         document.getElementById('searchBtn').addEventListener('click', function() {
             const searchText = document.getElementById('dataSearch').value;
-            axios.get(`https://127.0.0.1:8001/get-data?search=${searchText}`)
+            axios.get(`https://127.0.0.1:8001/get-category/${searchText}`)  // 엔드포인트 수정
             .then(response => {
                 const dataList = document.getElementById('dataList');
                 dataList.innerHTML = '';
                 response.data.forEach(item => {
                     const li = document.createElement('li');
-                    li.textContent = `${item.name}: ${item.description}`;
+                    li.textContent = `${item.filename}: ${item.content}`;
                     dataList.appendChild(li);
                 });
             })
@@ -117,7 +117,7 @@
         // GPT 대화 보내기
         document.getElementById('sendQuery').addEventListener('click', function() {
             const query = document.getElementById('gptQuery').value;
-            axios.post('https://127.0.0.1:8001/chat', { query: query })
+            axios.post('https://127.0.0.1:8001/chat', { query: query })  // 엔드포인트 수정
             .then(response => {
                 document.getElementById('gptResponse').textContent = response.data.response;
             })
@@ -129,7 +129,7 @@
         // 디스코드 봇 명령어 보내기
         document.getElementById('sendDiscordCommand').addEventListener('click', function() {
             const command = document.getElementById('discordCommand').value;
-            axios.get(`https://127.0.0.1:8001/discord-bot?command=${command}`)
+            axios.get(`https://127.0.0.1:8001/discord-bot?command=${command}`)  // 엔드포인트 수정
             .then(response => {
                 document.getElementById('discordResponse').textContent = response.data.message;
             })
@@ -140,7 +140,7 @@
 
         // 시스템 상태 조회
         document.getElementById('getSystemStatus').addEventListener('click', function() {
-            axios.get('https://127.0.0.1:8001/game-status')
+            axios.get('https://127.0.0.1:8001/game-status')  // 엔드포인트 수정
             .then(response => {
                 document.getElementById('systemStatus').textContent = `Players: ${response.data.game_status.players}, Score: ${response.data.game_status.score}, Status: ${response.data.game_status.status}`;
             })
