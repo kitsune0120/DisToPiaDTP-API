@@ -65,7 +65,7 @@ app = FastAPI(
 )
 
 # -------------------------------
-# Custom OpenAPI (servers 항목 포함, HTTPS 적용 예시)
+# Custom OpenAPI (servers 항목 포함)
 # -------------------------------
 from fastapi.openapi.utils import get_openapi
 
@@ -79,8 +79,7 @@ def custom_openapi():
         routes=app.routes,
     )
     openapi_schema["openapi"] = "3.1.0"
-    # 서버 URL을 HTTPS로 설정하고 싶다면 아래와 같이 수정 (예: https://127.0.0.1:8000)
-    # 여기서는 예시로 HTTPS를 사용하지 않고 http로 설정하는 경우입니다.
+    # HTTPS를 사용하려면 아래 URL을 "https://127.0.0.1:8000"으로 변경하세요.
     openapi_schema["servers"] = [
         {"url": "http://127.0.0.1:8000", "description": "Local development server"}
     ]
@@ -823,3 +822,19 @@ def get_actions_json():
         }
     }
     return actions_schema
+
+# -------------------------------
+# OpenAPI 스키펙 엔드포인트 (FastAPI 기본 문서)
+# -------------------------------
+@app.get("/openapi.json", include_in_schema=False)
+def openapi_schema():
+    from fastapi.openapi.utils import get_openapi
+    return get_openapi(title=app.title, version=app.version, routes=app.routes)
+
+# -------------------------------
+# 앱 실행
+# -------------------------------
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
