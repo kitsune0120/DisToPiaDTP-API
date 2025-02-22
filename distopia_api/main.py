@@ -837,6 +837,4 @@ def openapi_schema():
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
-    # HTTPS 환경에서 실행하려면 uvicorn 실행 시 SSL 옵션을 추가하세요.
-    # 예를 들어, 포트 8001을 사용하여 HTTPS로 실행:
-    uvicorn.run(app, host="0.0.0.0", port=8001, ssl_keyfile="D:\\DTP\\DTP\\data\\key.pem", ssl_certfile="D:\\DTP\\DTP\\data\\cert.pem")
+    uvicorn.run(app, host="0.0.0.0", port=8001, ssl_keyfile="D:/DTP/DTP/data/key.pem", ssl_certfile="D:/DTP/DTP/data/cert.pem")
