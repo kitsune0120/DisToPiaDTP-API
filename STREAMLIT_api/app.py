@@ -1,215 +1,153 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DisToPia API 프론트엔드</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-    }
-    .container {
-      width: 80%;
-      margin: 0 auto;
-    }
-    button {
-      padding: 10px;
-      font-size: 16px;
-      cursor: pointer;
-    }
-    .response {
-      margin-top: 20px;
-      padding: 10px;
-      background-color: #f4f4f4;
-      border: 1px solid #ddd;
-    }
-    #file-upload-form {
-      margin-top: 20px;
-    }
-    #progress-bar-container {
-      width: 100%;
-      height: 20px;
-      background-color: #f3f3f3;
-      margin-top: 10px;
-    }
-    #progress-bar {
-      width: 0%;
-      height: 100%;
-      background-color: green;
-    }
-    .hidden {
-      display: none;
-    }
-    .spinner {
-      border: 8px solid #f3f3f3;
-      border-top: 8px solid #3498db;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      animation: spin 2s linear infinite;
-      margin-top: 20px;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DisToPia API Frontend</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 </head>
 <body>
+    <div class="container mt-5">
+        <h1 class="text-center">DisToPia API</h1>
+        
+        <!-- 파일 업로드 섹션 -->
+        <div class="mb-3">
+            <h4>파일 업로드</h4>
+            <input type="file" id="fileUpload" class="form-control" />
+            <button id="uploadBtn" class="btn btn-primary mt-3">파일 업로드</button>
+        </div>
 
-<div class="container">
-  <h1>DisToPia API 인터페이스</h1>
+        <!-- 업로드된 파일 다운로드 -->
+        <div class="mb-3">
+            <h4>파일 다운로드</h4>
+            <input type="text" id="fileName" class="form-control" placeholder="다운로드할 파일 이름" />
+            <button id="downloadBtn" class="btn btn-success mt-3">파일 다운로드</button>
+        </div>
 
-  <!-- 로그인 -->
-  <h2>로그인</h2>
-  <form id="login-form">
-    <label for="username">사용자 이름:</label>
-    <input type="text" id="username" name="username" required><br><br>
-    <label for="password">비밀번호:</label>
-    <input type="password" id="password" name="password" required><br><br>
-    <button type="submit">로그인</button>
-  </form>
-  <div id="login-response" class="response"></div>
+        <!-- 데이터베이스 내용 조회 및 수정 -->
+        <div class="mb-3">
+            <h4>데이터베이스 조회 및 수정</h4>
+            <input type="text" id="dataSearch" class="form-control" placeholder="데이터 검색" />
+            <button id="searchBtn" class="btn btn-info mt-3">검색</button>
+            <ul id="dataList" class="mt-3"></ul>
+        </div>
 
-  <!-- 파일 업로드 -->
-  <h2>파일 업로드</h2>
-  <form id="file-upload-form" enctype="multipart/form-data">
-    <input type="file" id="file" name="file" multiple required><br><br>
-    <button type="submit">파일 업로드</button>
-    <div id="progress-bar-container" class="hidden">
-      <div id="progress-bar"></div>
+        <!-- GPT 대화창 -->
+        <div class="mb-3">
+            <h4>GPT-4 대화</h4>
+            <textarea id="gptQuery" class="form-control" placeholder="질문을 입력하세요"></textarea>
+            <button id="sendQuery" class="btn btn-warning mt-3">질문 전송</button>
+            <div id="gptResponse" class="mt-3"></div>
+        </div>
+        
+        <!-- 디스코드 봇 명령어 -->
+        <div class="mb-3">
+            <h4>디스코드 봇 명령</h4>
+            <input type="text" id="discordCommand" class="form-control" placeholder="명령어 입력" />
+            <button id="sendDiscordCommand" class="btn btn-secondary mt-3">명령 전송</button>
+            <div id="discordResponse" class="mt-3"></div>
+        </div>
+
+        <!-- 시스템 상태 조회 -->
+        <div class="mb-3">
+            <h4>시스템 상태</h4>
+            <button id="getSystemStatus" class="btn btn-dark mt-3">시스템 상태 조회</button>
+            <div id="systemStatus" class="mt-3"></div>
+        </div>
+
     </div>
-  </form>
-  <div id="file-upload-response" class="response"></div>
 
-  <!-- 대화 -->
-  <h2>GPT-4 대화</h2>
-  <textarea id="chat-query" rows="4" cols="50" placeholder="질문을 입력하세요..." required></textarea><br><br>
-  <button id="chat-submit">대화하기</button>
-  <div id="chat-response" class="response"></div>
+    <script>
+        // 업로드 버튼 클릭 시
+        document.getElementById('uploadBtn').addEventListener('click', function() {
+            const fileInput = document.getElementById('fileUpload');
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
 
-  <!-- DB 백업 -->
-  <h2>DB 백업</h2>
-  <button id="backup-db-btn">DB 백업</button>
-  <div id="backup-db-response" class="response"></div>
+            axios.post('https://127.0.0.1:8001/upload/', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                }
+            })
+            .then(response => {
+                alert("파일 업로드 성공");
+            })
+            .catch(error => {
+                alert("파일 업로드 실패");
+            });
+        });
 
-  <!-- 사용자 피드백 -->
-  <h2>사용자 피드백</h2>
-  <form id="feedback-form">
-    <label for="user-feedback">피드백:</label><br>
-    <textarea id="user-feedback" rows="4" cols="50" placeholder="피드백을 입력하세요..."></textarea><br><br>
-    <button type="submit">피드백 제출</button>
-  </form>
-  <div id="feedback-response" class="response"></div>
-</div>
+        // 다운로드 버튼 클릭 시
+        document.getElementById('downloadBtn').addEventListener('click', function() {
+            const fileName = document.getElementById('fileName').value;
+            axios.get(`https://127.0.0.1:8001/download/${fileName}`, {
+                responseType: 'blob',
+            })
+            .then(response => {
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(response.data);
+                link.download = fileName;
+                link.click();
+            })
+            .catch(error => {
+                alert("파일 다운로드 실패");
+            });
+        });
 
-<script>
-  // 로그인 처리
-  document.getElementById('login-form').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
+        // 데이터베이스에서 데이터 검색
+        document.getElementById('searchBtn').addEventListener('click', function() {
+            const searchText = document.getElementById('dataSearch').value;
+            axios.get(`https://127.0.0.1:8001/get-data?search=${searchText}`)
+            .then(response => {
+                const dataList = document.getElementById('dataList');
+                dataList.innerHTML = '';
+                response.data.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = `${item.name}: ${item.description}`;
+                    dataList.appendChild(li);
+                });
+            })
+            .catch(error => {
+                alert("데이터 검색 실패");
+            });
+        });
 
-    const response = await fetch('https://127.0.0.1:8001/login-for-access-token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ username, password })
-    });
+        // GPT 대화 보내기
+        document.getElementById('sendQuery').addEventListener('click', function() {
+            const query = document.getElementById('gptQuery').value;
+            axios.post('https://127.0.0.1:8001/chat', { query: query })
+            .then(response => {
+                document.getElementById('gptResponse').textContent = response.data.response;
+            })
+            .catch(error => {
+                alert("GPT-4 호출 실패");
+            });
+        });
 
-    const data = await response.json();
-    const loginResponse = document.getElementById('login-response');
-    if (response.ok) {
-      localStorage.setItem("token", data.access_token); // JWT 토큰 저장
-      loginResponse.textContent = `로그인 성공! 토큰: ${data.access_token}`;
-    } else {
-      loginResponse.textContent = `로그인 실패: ${data.detail}`;
-    }
-  });
+        // 디스코드 봇 명령어 보내기
+        document.getElementById('sendDiscordCommand').addEventListener('click', function() {
+            const command = document.getElementById('discordCommand').value;
+            axios.get(`https://127.0.0.1:8001/discord-bot?command=${command}`)
+            .then(response => {
+                document.getElementById('discordResponse').textContent = response.data.message;
+            })
+            .catch(error => {
+                alert("디스코드 명령 처리 실패");
+            });
+        });
 
-  // 파일 업로드 처리
-  document.getElementById('file-upload-form').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const fileInput = document.getElementById('file');
-    const formData = new FormData();
-    for (let file of fileInput.files) {
-      formData.append('file', file);
-    }
-
-    const progressBar = document.getElementById('progress-bar');
-    const progressContainer = document.getElementById('progress-bar-container');
-    progressContainer.classList.remove('hidden');
-
-    const response = await fetch('https://127.0.0.1:8001/upload/', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: formData
-    });
-
-    if (response.ok) {
-      progressBar.style.width = '100%';
-      const data = await response.json();
-      document.getElementById('file-upload-response').textContent = `파일 업로드 성공: ${data.filename}`;
-    } else {
-      document.getElementById('file-upload-response').textContent = '파일 업로드 실패';
-    }
-  });
-
-  // GPT-4 대화 처리
-  document.getElementById('chat-submit').addEventListener('click', async () => {
-    const query = document.getElementById('chat-query').value;
-    const history = []; // 히스토리 추가 가능
-
-    const response = await fetch('https://127.0.0.1:8001/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: JSON.stringify({ query, history })
-    });
-
-    const data = await response.json();
-    const chatResponse = document.getElementById('chat-response');
-    if (response.ok) {
-      chatResponse.textContent = `GPT 응답: ${data.response}`;
-    } else {
-      chatResponse.textContent = `대화 오류: ${data.detail}`;
-    }
-  });
-
-  // DB 백업 처리
-  document.getElementById('backup-db-btn').addEventListener('click', async () => {
-    const response = await fetch('https://127.0.0.1:8001/backup-db', {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-    const data = await response.json();
-    document.getElementById('backup-db-response').textContent = response.ok ? `DB 백업 성공! 파일 위치: ${data.message}` : `DB 백업 실패: ${data.error}`;
-  });
-
-  // 사용자 피드백 처리
-  document.getElementById('feedback-form').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const feedback = document.getElementById('user-feedback').value;
-
-    const response = await fetch('https://127.0.0.1:8001/growth-feedback', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: JSON.stringify({ user: "anonymous", feedback })
-    });
-
-    const data = await response.json();
-    document.getElementById('feedback-response').textContent = `피드백 저장 성공: ${data.feedback}`;
-  });
-</script>
-
+        // 시스템 상태 조회
+        document.getElementById('getSystemStatus').addEventListener('click', function() {
+            axios.get('https://127.0.0.1:8001/game-status')
+            .then(response => {
+                document.getElementById('systemStatus').textContent = `Players: ${response.data.game_status.players}, Score: ${response.data.game_status.score}, Status: ${response.data.game_status.status}`;
+            })
+            .catch(error => {
+                alert("게임 상태 조회 실패");
+            });
+        });
+    </script>
 </body>
 </html>
