@@ -2,146 +2,108 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DisToPia API Frontend</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    .container { max-width: 800px; margin: 0 auto; }
-    .section { margin-bottom: 40px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
-    label { display: block; margin-top: 10px; }
-    input[type="text"], input[type="password"], textarea { width: 100%; padding: 8px; box-sizing: border-box; }
-    button { margin-top: 10px; padding: 8px 16px; }
-    .output { margin-top: 10px; background: #f4f4f4; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    input, button { padding: 8px; margin: 5px 0; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>DisToPia API 프론트엔드</h1>
+  <h1>DisToPia API Frontend</h1>
+  <div>
+    <h2>로그인</h2>
+    <input type="text" id="username" placeholder="아이디">
+    <input type="password" id="password" placeholder="비밀번호">
+    <button onclick="login()">로그인</button>
+  </div>
 
-    <!-- 로그인 섹션 -->
-    <div class="section" id="login-section">
-      <h2>로그인</h2>
-      <label for="username">아이디:</label>
-      <input type="text" id="username" placeholder="아이디 입력" />
-      <label for="password">비밀번호:</label>
-      <input type="password" id="password" placeholder="비밀번호 입력" />
-      <button onclick="login()">로그인</button>
-      <div id="login-output" class="output"></div>
-    </div>
+  <div>
+    <h2>데이터 추가</h2>
+    <input type="text" id="dataName" placeholder="데이터 이름">
+    <input type="text" id="dataDescription" placeholder="데이터 설명">
+    <button onclick="addData()">데이터 추가</button>
+  </div>
 
-    <!-- 대화 섹션 -->
-    <div class="section" id="chat-section">
-      <h2>대화하기</h2>
-      <label for="chat-query">질문:</label>
-      <input type="text" id="chat-query" placeholder="질문 입력" />
-      <button onclick="sendChat()">전송</button>
-      <div id="chat-output" class="output"></div>
-    </div>
+  <div>
+    <h2>파일 업로드</h2>
+    <input type="file" id="fileInput">
+    <button onclick="uploadFile()">파일 업로드</button>
+  </div>
 
-    <!-- 파일 업로드 섹션 -->
-    <div class="section" id="upload-section">
-      <h2>파일 업로드</h2>
-      <input type="file" id="file-input" />
-      <button onclick="uploadFile()">업로드</button>
-      <div id="upload-output" class="output"></div>
-    </div>
-
-    <!-- 게임 상태 조회 섹션 -->
-    <div class="section" id="game-status-section">
-      <h2>게임 상태 조회</h2>
-      <button onclick="getGameStatus()">상태 확인</button>
-      <div id="game-status-output" class="output"></div>
-    </div>
+  <div>
+    <h2>대화 요청 (GPT-4)</h2>
+    <input type="text" id="chatQuery" placeholder="질문 입력">
+    <button onclick="chat()">대화 요청</button>
+    <p id="chatResponse"></p>
   </div>
 
   <script>
-    let token = '';
+    // API 호출 시, 상대 경로를 사용하므로, 백엔드와 같은 도메인에 있으면 HTTPS도 자동 적용됨.
+    const apiBase = ""; // 동일 도메인 사용
 
-    // 로그인 함수: /login-for-access-token 엔드포인트 호출
     async function login() {
       const username = document.getElementById('username').value;
       const password = document.getElementById('password').value;
-      try {
-        const response = await fetch('/login-for-access-token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-        const data = await response.json();
-        if (response.ok) {
-          token = data.access_token;
-          document.getElementById('login-output').innerText = '로그인 성공! 토큰: ' + token;
-        } else {
-          document.getElementById('login-output').innerText = '로그인 실패: ' + data.detail;
-        }
-      } catch (error) {
-        document.getElementById('login-output').innerText = '에러 발생: ' + error;
+      const res = await fetch(apiBase + "/login-for-access-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        localStorage.setItem("token", data.access_token);
+        alert("로그인 성공!");
+      } else {
+        alert("로그인 실패: " + data.detail);
       }
     }
 
-    // 대화 함수: /chat 엔드포인트 호출
-    async function sendChat() {
-      const query = document.getElementById('chat-query').value;
-      try {
-        const response = await fetch('/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token && { 'Authorization': 'Bearer ' + token })
-          },
-          body: JSON.stringify({ query, history: [] })
-        });
-        const data = await response.json();
-        if (response.ok) {
-          document.getElementById('chat-output').innerText = '응답: ' + data.response;
-        } else {
-          document.getElementById('chat-output').innerText = '에러: ' + JSON.stringify(data);
-        }
-      } catch (error) {
-        document.getElementById('chat-output').innerText = '에러 발생: ' + error;
-      }
+    async function addData() {
+      const token = localStorage.getItem("token");
+      const name = document.getElementById('dataName').value;
+      const description = document.getElementById('dataDescription').value;
+      const res = await fetch(apiBase + "/add-data", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + token
+        },
+        body: JSON.stringify({ name, description })
+      });
+      const data = await res.json();
+      alert(data.message);
     }
 
-    // 파일 업로드 함수: /upload/ 엔드포인트 호출
     async function uploadFile() {
-      const fileInput = document.getElementById('file-input');
-      if (fileInput.files.length === 0) {
-        alert('업로드할 파일을 선택해주세요.');
-        return;
-      }
+      const token = localStorage.getItem("token");
+      const fileInput = document.getElementById('fileInput');
       const formData = new FormData();
-      formData.append('file', fileInput.files[0]);
-      try {
-        const response = await fetch('/upload/', {
-          method: 'POST',
-          headers: {
-            ...(token && { 'Authorization': 'Bearer ' + token })
-          },
-          body: formData
-        });
-        const data = await response.json();
-        if (response.ok) {
-          document.getElementById('upload-output').innerText = '업로드 성공: ' + data.message;
-        } else {
-          document.getElementById('upload-output').innerText = '업로드 실패: ' + JSON.stringify(data);
-        }
-      } catch (error) {
-        document.getElementById('upload-output').innerText = '에러 발생: ' + error;
-      }
+      formData.append("file", fileInput.files[0]);
+      const res = await fetch(apiBase + "/upload/", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + token
+        },
+        body: formData
+      });
+      const data = await res.json();
+      alert(data.message);
     }
 
-    // 게임 상태 조회 함수: /game-status 엔드포인트 호출
-    async function getGameStatus() {
-      try {
-        const response = await fetch('/game-status');
-        const data = await response.json();
-        if (response.ok) {
-          document.getElementById('game-status-output').innerText = '게임 상태: ' + JSON.stringify(data.game_status);
-        } else {
-          document.getElementById('game-status-output').innerText = '에러: ' + JSON.stringify(data);
-        }
-      } catch (error) {
-        document.getElementById('game-status-output').innerText = '에러 발생: ' + error;
-      }
+    async function chat() {
+      const token = localStorage.getItem("token");
+      const query = document.getElementById('chatQuery').value;
+      const res = await fetch(apiBase + "/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + token
+        },
+        body: JSON.stringify({ query })
+      });
+      const data = await res.json();
+      document.getElementById('chatResponse').innerText = data.response;
     }
   </script>
 </body>
