@@ -65,8 +65,10 @@ app = FastAPI(
 )
 
 # -------------------------------
-# Custom OpenAPI (servers 항목 포함, HTTPS 적용)
+# Custom OpenAPI (servers 항목 포함, HTTPS 적용 예시)
 # -------------------------------
+from fastapi.openapi.utils import get_openapi
+
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
@@ -77,9 +79,10 @@ def custom_openapi():
         routes=app.routes,
     )
     openapi_schema["openapi"] = "3.1.0"
-    # 서버 URL을 https://127.0.0.1:8000 으로 설정 (HTTPS 적용)
+    # 서버 URL을 HTTPS로 설정하고 싶다면 아래와 같이 수정 (예: https://127.0.0.1:8000)
+    # 여기서는 예시로 HTTPS를 사용하지 않고 http로 설정하는 경우입니다.
     openapi_schema["servers"] = [
-        {"url": "https://127.0.0.1:8000", "description": "Local development server"}
+        {"url": "http://127.0.0.1:8000", "description": "Local development server"}
     ]
     app.openapi_schema = openapi_schema
     return app.openapi_schema
@@ -572,134 +575,251 @@ def backup_db():
 @app.get("/actions.json", include_in_schema=False)
 def get_actions_json():
     actions_schema = {
-        "version": "1.0",
-        "actions": [
-            {
-                "name": "login",
-                "description": "사용자 로그인 및 JWT 토큰 발급",
-                "endpoint": "/login-for-access-token",
-                "method": "POST",
-                "parameters": {
-                    "username": {"type": "string", "description": "사용자 아이디"},
-                    "password": {"type": "string", "description": "사용자 비밀번호"}
+        "openapi": "3.1.0",
+        "info": {
+            "title": "DisToPia API Actions",
+            "version": "1.0",
+            "description": "Actions schema for GPT integration"
+        },
+        "paths": {
+            "/login-for-access-token": {
+                "post": {
+                    "summary": "사용자 로그인 및 JWT 토큰 발급",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "username": {
+                                            "type": "string",
+                                            "description": "사용자 아이디"
+                                        },
+                                        "password": {
+                                            "type": "string",
+                                            "description": "사용자 비밀번호"
+                                        }
+                                    },
+                                    "required": ["username", "password"]
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {"description": "로그인 성공"}
+                    }
                 }
             },
-            {
-                "name": "uploadFile",
-                "description": "파일 업로드 및 분석 후 DB에 저장",
-                "endpoint": "/upload/",
-                "method": "POST",
-                "parameters": {
-                    "file": {"type": "string", "format": "binary", "description": "파일(이진 데이터) - multipart/form-data로 전송 필요"}
+            "/upload/": {
+                "post": {
+                    "summary": "파일 업로드 및 분석 후 DB에 저장",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "multipart/form-data": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "file": {
+                                            "type": "string",
+                                            "format": "binary",
+                                            "description": "파일(이진 데이터) - multipart/form-data로 전송 필요"
+                                        }
+                                    },
+                                    "required": ["file"]
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {"description": "파일 업로드 성공"}
+                    }
                 }
             },
-            {
-                "name": "downloadFile",
-                "description": "파일 다운로드",
-                "endpoint": "/download/{filename}",
-                "method": "GET",
-                "parameters": {
-                    "filename": {"type": "string", "description": "다운로드할 파일 이름"}
+            "/download/{filename}": {
+                "get": {
+                    "summary": "파일 다운로드",
+                    "parameters": [
+                        {
+                            "in": "path",
+                            "name": "filename",
+                            "required": True,
+                            "schema": {"type": "string", "description": "다운로드할 파일 이름"}
+                        }
+                    ],
+                    "responses": {
+                        "200": {"description": "파일 다운로드 성공"}
+                    }
                 }
             },
-            {
-                "name": "deleteFile",
-                "description": "파일 삭제",
-                "endpoint": "/delete-file/{filename}",
-                "method": "DELETE",
-                "parameters": {
-                    "filename": {"type": "string", "description": "삭제할 파일 이름"}
+            "/delete-file/{filename}": {
+                "delete": {
+                    "summary": "파일 삭제",
+                    "parameters": [
+                        {
+                            "in": "path",
+                            "name": "filename",
+                            "required": True,
+                            "schema": {"type": "string", "description": "삭제할 파일 이름"}
+                        }
+                    ],
+                    "responses": {
+                        "200": {"description": "파일 삭제 성공"}
+                    }
                 }
             },
-            {
-                "name": "chatRAG",
-                "description": "RAG 기반 대화 API (GPT-4 모델 사용)",
-                "endpoint": "/chat",
-                "method": "POST",
-                "parameters": {
-                    "query": {"type": "string", "description": "사용자 질문"},
-                    "history": {"type": "array", "description": "이전 대화 히스토리", "items": {"type": "string"}}
+            "/chat": {
+                "post": {
+                    "summary": "RAG 기반 대화 API (GPT-4 모델 사용)",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "query": {"type": "string", "description": "사용자 질문"},
+                                        "history": {
+                                            "type": "array",
+                                            "description": "이전 대화 히스토리",
+                                            "items": {"type": "string"}
+                                        }
+                                    },
+                                    "required": ["query"]
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {"description": "대화 응답 성공"}
+                    }
                 }
             },
-            {
-                "name": "discordBotCommand",
-                "description": "Discord 봇 명령 테스트",
-                "endpoint": "/discord-bot",
-                "method": "GET",
-                "parameters": {
-                    "command": {"type": "string", "description": "봇 명령어"}
+            "/discord-bot": {
+                "get": {
+                    "summary": "Discord 봇 명령 테스트",
+                    "parameters": [
+                        {
+                            "in": "query",
+                            "name": "command",
+                            "required": True,
+                            "schema": {"type": "string", "description": "봇 명령어"}
+                        }
+                    ],
+                    "responses": {
+                        "200": {"description": "Discord 봇 명령 처리 성공"}
+                    }
                 }
             },
-            {
-                "name": "rpEvent",
-                "description": "RP 이벤트 생성",
-                "endpoint": "/rp-event",
-                "method": "POST",
-                "parameters": {
-                    "event": {"type": "string", "description": "생성할 이벤트 이름"}
+            "/rp-event": {
+                "post": {
+                    "summary": "RP 이벤트 생성",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "event": {"type": "string", "description": "생성할 이벤트 이름"}
+                                    },
+                                    "required": ["event"]
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {"description": "RP 이벤트 생성 성공"}
+                    }
                 }
             },
-            {
-                "name": "gameStatus",
-                "description": "게임 상태 조회",
-                "endpoint": "/game-status",
-                "method": "GET",
-                "parameters": {}
-            },
-            {
-                "name": "growthFeedback",
-                "description": "사용자 피드백 저장",
-                "endpoint": "/growth-feedback",
-                "method": "POST",
-                "parameters": {
-                    "user": {"type": "string", "description": "사용자 이름"},
-                    "feedback": {"type": "string", "description": "피드백 내용"}
+            "/game-status": {
+                "get": {
+                    "summary": "게임 상태 조회",
+                    "responses": {
+                        "200": {"description": "게임 상태 조회 성공"}
+                    }
                 }
             },
-            {
-                "name": "updatePersonalization",
-                "description": "사용자 개인화 설정 업데이트",
-                "endpoint": "/update-personalization",
-                "method": "POST",
-                "parameters": {
-                    "user": {"type": "string", "description": "사용자 이름"},
-                    "preferences": {"type": "string", "description": "선호 설정 내용"}
+            "/growth-feedback": {
+                "post": {
+                    "summary": "사용자 피드백 저장",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "user": {"type": "string", "description": "사용자 이름"},
+                                        "feedback": {"type": "string", "description": "피드백 내용"}
+                                    },
+                                    "required": ["user", "feedback"]
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {"description": "피드백 저장 성공"}
+                    }
                 }
             },
-            {
-                "name": "backupMemory",
-                "description": "대화 내용 백업",
-                "endpoint": "/backup-memory",
-                "method": "POST",
-                "parameters": {
-                    "user_id": {"type": "string", "description": "사용자 ID"},
-                    "query": {"type": "string", "description": "사용자 입력"},
-                    "response": {"type": "string", "description": "GPT 응답"}
+            "/update-personalization": {
+                "post": {
+                    "summary": "사용자 개인화 설정 업데이트",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "user": {"type": "string", "description": "사용자 이름"},
+                                        "preferences": {"type": "string", "description": "선호 설정 내용"}
+                                    },
+                                    "required": ["user", "preferences"]
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {"description": "개인화 설정 업데이트 성공"}
+                    }
                 }
             },
-            {
-                "name": "backupDB",
-                "description": "DB 백업",
-                "endpoint": "/backup-db",
-                "method": "GET",
-                "parameters": {}
+            "/backup-memory": {
+                "post": {
+                    "summary": "대화 내용 백업",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "user_id": {"type": "string", "description": "사용자 ID"},
+                                        "query": {"type": "string", "description": "사용자 입력"},
+                                        "response": {"type": "string", "description": "GPT 응답"}
+                                    },
+                                    "required": ["user_id", "query", "response"]
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {"description": "대화 백업 성공"}
+                    }
+                }
+            },
+            "/backup-db": {
+                "get": {
+                    "summary": "DB 백업",
+                    "responses": {
+                        "200": {"description": "DB 백업 성공"}
+                    }
+                }
             }
-        ]
+        }
     }
     return actions_schema
-
-# -------------------------------
-# OpenAPI 스펙 엔드포인트 (FastAPI 기본 문서)
-# -------------------------------
-@app.get("/openapi.json", include_in_schema=False)
-def openapi_schema():
-    from fastapi.openapi.utils import get_openapi
-    return get_openapi(title=app.title, version=app.version, routes=app.routes)
-
-# -------------------------------
-# 앱 실행
-# -------------------------------
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
