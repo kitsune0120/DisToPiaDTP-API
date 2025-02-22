@@ -56,7 +56,16 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # -------------------------------
-# Custom OpenAPI (servers 항목)
+# FastAPI 앱 생성
+# -------------------------------
+app = FastAPI(
+    title="DisToPia API (Local)",
+    description="DTP 세계관 API (로컬 DB + AI + 파일 관리)",
+    version="4.0"
+)
+
+# -------------------------------
+# Custom OpenAPI (servers 항목 포함)
 # -------------------------------
 from fastapi.openapi.utils import get_openapi
 
@@ -64,9 +73,9 @@ def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
     openapi_schema = get_openapi(
-        title="DisToPia API (Local)",
-        version="4.0",
-        description="DTP 세계관 API (로컬 DB + AI + 파일 관리)",
+        title=app.title,
+        version=app.version,
+        description=app.description,
         routes=app.routes,
     )
     openapi_schema["openapi"] = "3.1.0"
@@ -76,14 +85,6 @@ def custom_openapi():
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
-# -------------------------------
-# FastAPI 앱 생성
-# -------------------------------
-app = FastAPI(
-    title="DisToPia API (Local)",
-    description="DTP 세계관 API (로컬 DB + AI + 파일 관리)",
-    version="4.0"
-)
 app.openapi = custom_openapi
 
 UPLOAD_DIR = "uploads"
@@ -491,7 +492,6 @@ def discord_bot_command(command: str):
 def rp_event(event: str):
     logger.info(f"POST /rp-event 요청 받음. Event: {event}")
     try:
-        # 실제 이벤트 생성 로직(예: DB 저장 등)이 들어갈 수 있음
         return {"message": f"RP 이벤트 '{event}'가 생성되었습니다."}
     except Exception as e:
         return {"error": f"RP 이벤트 생성 실패: {e}"}
@@ -690,14 +690,6 @@ def get_actions_json():
         ]
     }
     return actions_schema
-
-# -------------------------------
-# OpenAPI 스펙 엔드포인트 (FastAPI 기본 문서)
-# -------------------------------
-@app.get("/openapi.json", include_in_schema=False)
-def openapi_schema():
-    from fastapi.openapi.utils import get_openapi
-    return get_openapi(title=app.title, version=app.version, routes=app.routes)
 
 # -------------------------------
 # 앱 실행
