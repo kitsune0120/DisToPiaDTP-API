@@ -50,10 +50,25 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # FastAPI 앱 생성
+from fastapi.middleware.cors import CORSMiddleware  # CORS 미들웨어 임포트
+
 app = FastAPI(
     title="DisToPia API (Local)",
     description="DTP 세계관 API (로컬 DB + AI + 파일 관리)",
     version="4.0"
+)
+
+# CORS 설정: 127.0.0.1에서의 요청을 허용
+origins = [
+    "https://127.0.0.1",  # 원하는 오리진을 추가
+    "http://127.0.0.1",   # 포트 없이도 허용
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # 허용할 오리진 설정
+    allow_credentials=True,
+    allow_methods=["*"],  # 모든 HTTP 메소드 허용
+    allow_headers=["*"],  # 모든 헤더 허용
 )
 
 # Custom OpenAPI (servers 항목 포함, HTTPS 적용)
@@ -155,7 +170,7 @@ def create_table():
     if not conn:
         raise HTTPException(status_code=500, detail="DB 연결 실패")
     cursor = conn.cursor()
-    cursor.execute("""
+    cursor.execute(""" 
         CREATE TABLE IF NOT EXISTS dtp_data (
             id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
@@ -228,3 +243,12 @@ def get_category_from_db(category_name: str):
         {"filename": "potato_file1.txt", "content": "포타토 관련 내용..."},
         {"filename": "potato_file2.txt", "content": "또 다른 포타토 관련 내용..."}
     ]
+
+# Flask와 비슷한 FastAPI 구조로 라우트 설정
+@app.get("/")
+def hello_world():
+    return {"message": "Hello, World!"}
+
+if __name__ == '__main__':
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8001)
