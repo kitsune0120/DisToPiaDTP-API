@@ -243,6 +243,114 @@ def get_category_from_db(category_name: str):
         {"filename": "potato_file1.txt", "content": "포타토 관련 내용..."},
         {"filename": "potato_file2.txt", "content": "또 다른 포타토 관련 내용..."}
     ]
+@app.post("/process-file")
+async def process_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    # 파일 업로드
+    with open(f"uploads/{file.filename}", "wb") as f:
+        f.write(file.file.read())
+    
+    # DB에 저장
+    category = Category(name=file.filename, description="Uploaded file")
+    db.add(category)
+    db.commit()
+    db.refresh(category)
+
+    # 시스템 상태 확인
+    game_status = {"players": 10, "score": 200, "status": "active"}
+
+    return {"file": file.filename, "game_status": game_status, "message": "File processed and saved"}
+
+@app.get("/discord-bot")
+def discord_bot_command(command: str):
+    # 여기서 디스코드 봇 API와 연동하여 명령어 처리
+    return {"message": f"Executed command: {command}"}
+
+@app.get("/game-status")
+def get_game_status():
+    # 예시로 상태값을 반환
+    return {"game_status": {"players": 10, "score": 200, "status": "active"}}
+
+import openai
+
+openai.api_key = "your-openai-api-key"
+
+@app.post("/chat")
+async def chat(query: str):
+    response = openai.Completion.create(
+        engine="gpt-4",
+        prompt=query,
+        max_tokens=150
+    )
+    return {"response": response.choices[0].text.strip()}
+
+from sqlalchemy import Column, Integer, String
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.ext.declarative import declarative_base
+
+# DB 모델
+Base = declarative_base()
+
+class Category(Base):
+    __tablename__ = "categories"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    description = Column(String)
+
+@app.post("/add-data")
+def add_data(category: Category, db: Session = Depends(get_db)):
+    db.add(category)
+    db.commit()
+    db.refresh(category)
+    return {"message": "Data added successfully"}
+
+@app.get("/get-data")
+def get_data(db: Session = Depends(get_db)):
+    return db.query(Category).all()
+
+import os
+
+@app.get("/files")
+def list_files():
+    files = os.listdir("uploads")
+    return {"files": files}
+
+from fastapi import File, UploadFile
+
+@app.post("/upload-zip")
+async def upload_zip(file: UploadFile = File(...)):
+    with open(f"uploads/{file.filename}", "wb") as f:
+        f.write(file.file.read())
+    return {"filename": file.filename}
+
+from fastapi import Depends, HTTPException
+from pydantic import BaseModel
+import jwt
+from datetime import datetime, timedelta
+
+class User(BaseModel):
+    username: str
+    password: str
+
+@app.post("/login-for-access-token")
+def login_for_access_token(user: User):
+    # 사용자 검증 로직
+    # 예시로 username과 password가 admin인 경우에만 토큰 발급
+    if user.username == "admin" and user.password == "admin":
+        expiration = datetime.utcnow() + timedelta(hours=1)
+        token = jwt.encode({"sub": user.username, "exp": expiration}, "secret", algorithm="HS256")
+        return {"access_token": token}
+    else:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+@app.get("/download/{filename}")
+async def download_file(filename: str):
+    file_path = f"/path/to/files/{filename}"
+    return FileResponse(file_path)
+
+@app.post("/chat")
+async def chat_with_gpt(query: str):
+    response = openai.Completion.create(prompt=query)
+    return {"response": response.choices[0].text}
 
 # Flask와 비슷한 FastAPI 구조로 라우트 설정
 @app.get("/")
