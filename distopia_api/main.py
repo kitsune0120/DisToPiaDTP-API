@@ -65,10 +65,8 @@ app = FastAPI(
 )
 
 # -------------------------------
-# Custom OpenAPI (servers 항목 포함)
+# Custom OpenAPI (servers 항목 포함, HTTPS 적용)
 # -------------------------------
-from fastapi.openapi.utils import get_openapi
-
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
@@ -79,8 +77,9 @@ def custom_openapi():
         routes=app.routes,
     )
     openapi_schema["openapi"] = "3.1.0"
+    # 서버 URL을 https://127.0.0.1:8000 으로 설정 (HTTPS 적용)
     openapi_schema["servers"] = [
-        {"url": "http://127.0.0.1:8000", "description": "Local development server"}
+        {"url": "https://127.0.0.1:8000", "description": "Local development server"}
     ]
     app.openapi_schema = openapi_schema
     return app.openapi_schema
@@ -141,10 +140,10 @@ openai.api_key = OPENAI_API_KEY
 def get_gpt_response(query: str):
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4",  # GPT-4 모델 사용
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": query},
+                {"role": "user", "content": query}
             ]
         )
         return response['choices'][0]['message']['content']
@@ -259,12 +258,10 @@ def analyze_image(file_path: str) -> str:
         with Image.open(file_path) as img:
             if img.mode != "RGB":
                 img = img.convert("RGB")
-            # 이미지 캡션 생성
             pixel_values = image_processor(img, return_tensors="pt").pixel_values
             output_ids = image_caption_model.generate(pixel_values, max_length=50, num_beams=4)
             caption = caption_tokenizer.decode(output_ids[0], skip_special_tokens=True)
             result += f"[캡션] {caption}\n"
-            # 객체 감지
             inputs = object_processor(images=img, return_tensors="pt")
             outputs = object_detector(**inputs)
             detected = "객체: " + ", ".join([str(obj) for obj in outputs.logits.argmax(dim=-1).tolist()[0:3]])
@@ -690,6 +687,14 @@ def get_actions_json():
         ]
     }
     return actions_schema
+
+# -------------------------------
+# OpenAPI 스펙 엔드포인트 (FastAPI 기본 문서)
+# -------------------------------
+@app.get("/openapi.json", include_in_schema=False)
+def openapi_schema():
+    from fastapi.openapi.utils import get_openapi
+    return get_openapi(title=app.title, version=app.version, routes=app.routes)
 
 # -------------------------------
 # 앱 실행
